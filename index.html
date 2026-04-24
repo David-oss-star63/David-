@@ -48,6 +48,10 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.95),
         0 10px 20px rgba(15, 23, 42, 0.1);
     }
+    #amazonPage .amz-sub-stats .stat {
+      min-width: 118px;
+      flex: 1 1 118px;
+    }
     .stat {
       background:
         radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0) 34%),
@@ -161,6 +165,19 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
       gap: 12px;
+    }
+    .item-card.amz-card {
+      cursor: default;
+    }
+    .item-card.amz-card .btn {
+      cursor: pointer;
+    }
+    .item-card.amz-card .amz-warn {
+      color: #b91c1c;
+      font-weight: 700;
+      text-align: center;
+      margin: 6px 0 4px;
+      font-size: 0.85rem;
     }
     .item-card {
       background: #ffffff;
@@ -624,6 +641,19 @@
   </style>
 </head>
 <body>
+  <div id="homePage" class="container">
+    <h1>我的收藏系統</h1>
+    <div class="panel">
+      <div class="btn-row menu">
+        <button class="btn primary" onclick="goPage('trading')">收藏買賣</button>
+        <button class="btn secondary" onclick="goPage('amazon')">Amazon測評</button>
+        <button class="btn secondary" onclick="goPage('lego')">LEGO收藏</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="tradingPage" style="display:none;">
+  <button class="btn secondary" onclick="goPage('home')" style="width:auto; margin-bottom: 10px;">⬅ 返回首頁</button>
   <div class="container">
     <h1>收藏買賣管理</h1>
     <div class="panel top-panel">
@@ -712,6 +742,7 @@
             <button id="useLastCloudBtn" class="btn secondary">上次使用</button>
             <button id="pullCloudBtn" class="btn primary">立即載入</button>
             <button id="pushCloudBtn" class="btn secondary">推送本機</button>
+            <button id="safeSyncBtn" class="btn primary">一鍵安全同步</button>
           </div>
         </div>
       </div>
@@ -737,6 +768,66 @@
       </div>
     </div>
   </dialog>
+  </div>
+
+  <div id="amazonPage" style="display:none;">
+    <div class="container">
+      <button class="btn secondary" onclick="goPage('home')" style="width:auto; margin-bottom: 10px;">⬅ 返回首頁</button>
+      <h1>Amazon測評</h1>
+      <p style="color: var(--muted); margin: 0 0 14px; font-size: 0.95rem;">追蹤訂單流程、成本／退款、天數提醒與完成率。</p>
+
+      <div class="panel top-panel" style="margin-bottom: 14px;">
+        <div class="stat"><div class="label">總支出</div><div id="amzExpense" class="value">$0</div></div>
+        <div class="stat"><div class="label">總退款</div><div id="amzRefund" class="value">$0</div></div>
+        <div class="stat profit-stat"><div class="label">利潤</div><div id="amzProfit" class="value">$0</div></div>
+        <div class="stat"><div class="label">完成率</div><div id="amzRate" class="value">0%</div></div>
+      </div>
+
+      <div class="panel top-panel amz-sub-stats" style="margin-bottom: 14px;">
+        <div class="stat"><div class="label">總訂單數</div><div id="amzCntTotal" class="value">0</div></div>
+        <div class="stat"><div class="label">已到貨</div><div id="amzCntArrived" class="value">0</div></div>
+        <div class="stat"><div class="label">未到貨</div><div id="amzCntNotArrived" class="value">0</div></div>
+        <div class="stat"><div class="label">已上評</div><div id="amzCntReviewed" class="value">0</div></div>
+        <div class="stat"><div class="label">未上評</div><div id="amzCntNotReviewed" class="value">0</div></div>
+        <div class="stat"><div class="label">已退款</div><div id="amzCntHasRefund" class="value">0</div></div>
+        <div class="stat"><div class="label">未退款</div><div id="amzCntNoRefund" class="value">0</div></div>
+        <div class="stat profit-stat"><div class="label">已完成</div><div id="amzCntDone" class="value">0</div></div>
+      </div>
+
+      <div class="panel" style="margin-bottom: 14px;">
+        <div class="label" style="margin-bottom: 8px;">Amazon 雲端同步</div>
+        <p style="margin: 0 0 10px; font-size: 0.88rem; color: var(--muted);">與「收藏買賣」共用同一組 Supabase（URL / Anon Key / 帳本代號），資料表名稱為 <code>amazon_items</code>。</p>
+        <div class="btn-row" style="flex-wrap: wrap;">
+          <button type="button" id="amzPullCloudBtn" class="btn secondary">載入 Amazon 雲端</button>
+          <button type="button" id="amzPushCloudBtn" class="btn primary">推送 Amazon 雲端</button>
+        </div>
+        <div id="amzCloudStatus" style="margin-top: 8px; font-size: 0.88rem; color: #475569;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="label" style="margin-bottom: 10px;">新增訂單</div>
+        <div class="form-grid">
+          <div class="field"><label for="amzName">商品名稱</label><input id="amzName" type="text" placeholder="例如 藍牙耳機"></div>
+          <div class="field"><label for="amzCost">成本（支出）</label><input id="amzCost" type="number" min="0" step="1" placeholder="例如 100"></div>
+          <div class="field wide"><label for="amzLink">商品連結（選填）</label><input id="amzLink" type="url" placeholder="https://www.amazon.com/dp/..."></div>
+        </div>
+        <div class="btn-row" style="margin-top: 10px;">
+          <button id="amzAddBtn" type="button" class="btn primary">新增訂單</button>
+        </div>
+      </div>
+
+      <div id="amzList" class="grid" style="margin-top: 14px;"></div>
+      <div id="amzEmptyState" class="empty" hidden>目前沒有 Amazon 測評訂單，請用上方「新增訂單」加入。</div>
+    </div>
+  </div>
+
+  <div id="legoPage" style="display:none;">
+    <div class="container">
+      <button class="btn secondary" onclick="goPage('home')" style="width:auto; margin-bottom: 10px;">⬅ 返回首頁</button>
+      <h1>LEGO收藏</h1>
+      <div class="panel">這個頁面先預留，之後可加入 LEGO 收藏功能。</div>
+    </div>
+  </div>
 
   <script>
     const STORAGE_KEY = "collection_items_v2";
@@ -815,6 +906,7 @@
     const useLastCloudBtn = document.getElementById("useLastCloudBtn");
     const pullCloudBtn = document.getElementById("pullCloudBtn");
     const pushCloudBtn = document.getElementById("pushCloudBtn");
+    const safeSyncBtn = document.getElementById("safeSyncBtn");
     const cloudStatus = document.getElementById("cloudStatus");
 
     const countValue = document.getElementById("countValue");
@@ -1048,7 +1140,7 @@
       );
     }
 
-    async function pullCloudItems(isAuto) {
+    async function pullCloudItems(isAuto, throwOnError) {
       if (!isAuto) refreshCloudConfigFromInputs();
       if (!isCloudReady()) {
         setCloudStatus("請先填 Supabase URL / Anon Key / 帳本代號。", true);
@@ -1069,6 +1161,7 @@
         setCloudStatus((isAuto ? "已自動載入雲端資料，共 " : "已載入雲端資料，共 ") + items.length + " 筆。");
       } catch (error) {
         setCloudStatus((isAuto ? "自動載入雲端失敗：" : "載入雲端失敗：") + error.message, true);
+        if (throwOnError) throw error;
       }
     }
 
@@ -1088,6 +1181,25 @@
       } catch (error) {
         if (!isSilent) setCloudStatus("推送雲端失敗：" + error.message, true);
         throw error;
+      }
+    }
+
+    async function safeSyncCloud() {
+      if (!isCloudReady()) {
+        setCloudStatus("請先填 Supabase URL / Anon Key / 帳本代號。", true);
+        return;
+      }
+      try {
+        setCloudStatus("安全同步中：先載入雲端，再推送本機（含 Amazon）...");
+        await pullCloudItems(false, true);
+        await pullAmazonFromCloud({ silent: true, throwOnError: true });
+        await pushAllToCloud(true);
+        await pushAllAmazonToCloud(true);
+        setCloudStatus(
+          "安全同步完成：收藏 " + items.length + " 筆；Amazon " + amazonItems.length + " 筆。"
+        );
+      } catch (error) {
+        setCloudStatus("安全同步失敗：" + error.message, true);
       }
     }
 
@@ -1554,6 +1666,7 @@
     });
     pullCloudBtn.addEventListener("click", function() { pullCloudItems(false); });
     pushCloudBtn.addEventListener("click", function() { pushAllToCloud(false); });
+    safeSyncBtn.addEventListener("click", safeSyncCloud);
     imageInput.addEventListener("change", handleImageChange);
     modal.addEventListener("click", function(event) {
       const rect = modal.getBoundingClientRect();
@@ -1578,6 +1691,398 @@
     if (isCloudReady()) {
       pullCloudItems(true);
     }
+
+    const AMAZON_STORAGE_KEY = "amazon_items";
+
+    function normalizeAmazonRows(rows) {
+      if (!Array.isArray(rows)) return [];
+      return rows.map(function(item) {
+        const valid = ["ordered", "received", "reviewed", "refunded"];
+        const status = valid.indexOf(item.status) >= 0 ? item.status : "ordered";
+        let id = item.id;
+        if (id == null || id === "") id = Date.now();
+        const d = item.date ? new Date(item.date) : new Date();
+        const iso = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+        return {
+          id: id,
+          name: String(item.name || ""),
+          cost: Math.max(0, Number(item.cost || 0)),
+          refund: Math.max(0, Number(item.refund || 0)),
+          status: status,
+          date: iso,
+          link: String(item.link || "").trim()
+        };
+      });
+    }
+
+    let amazonItems = [];
+    try {
+      amazonItems = normalizeAmazonRows(JSON.parse(localStorage.getItem(AMAZON_STORAGE_KEY) || "[]"));
+    } catch (e) {
+      amazonItems = [];
+    }
+
+    function saveAmazon() {
+      localStorage.setItem(AMAZON_STORAGE_KEY, JSON.stringify(amazonItems));
+    }
+
+    function setAmzCloudStatus(message, isError) {
+      const el = document.getElementById("amzCloudStatus");
+      if (!el) return;
+      el.textContent = message;
+      el.style.color = isError ? "#b91c1c" : "#475569";
+    }
+
+    async function upsertAmazonItemToCloud(item) {
+      if (!isCloudReady()) return;
+      await supabaseRequest(
+        "POST",
+        "amazon_items?on_conflict=owner_id,item_id",
+        [{ owner_id: cloudConfig.owner, item_id: String(item.id), item_json: item }],
+        { "Prefer": "resolution=merge-duplicates,return=minimal" }
+      );
+    }
+
+    async function deleteAmazonItemFromCloud(itemId) {
+      if (!isCloudReady()) return;
+      await supabaseRequest(
+        "DELETE",
+        "amazon_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&item_id=eq." + encodeURIComponent(String(itemId)),
+        undefined,
+        { "Prefer": "return=minimal" }
+      );
+    }
+
+    async function pullAmazonFromCloud(opts) {
+      opts = opts || {};
+      const isSilent = Boolean(opts.silent);
+      const throwOnError = Boolean(opts.throwOnError);
+      if (!isSilent) refreshCloudConfigFromInputs();
+      if (!isCloudReady()) {
+        if (!isSilent) setAmzCloudStatus("請先在「設定」填寫 Supabase URL / Anon Key / 帳本代號。", true);
+        return;
+      }
+      try {
+        if (!isSilent) setAmzCloudStatus("載入 Amazon 雲端資料中...");
+        const rows = await supabaseRequest(
+          "GET",
+          "amazon_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&select=item_json",
+          undefined
+        );
+        const rawList = Array.isArray(rows) ? rows.map(function(r) { return r.item_json; }).filter(Boolean) : [];
+        amazonItems = normalizeAmazonRows(rawList);
+        saveAmazon();
+        rememberLastUsedCloudConfig();
+        renderAmazon();
+        if (!isSilent) setAmzCloudStatus("已載入 Amazon，共 " + amazonItems.length + " 筆。");
+      } catch (error) {
+        if (!isSilent) setAmzCloudStatus("Amazon 載入失敗：" + error.message, true);
+        if (throwOnError) throw error;
+      }
+    }
+
+    async function pushAllAmazonToCloud(isSilent) {
+      if (!isSilent) refreshCloudConfigFromInputs();
+      if (!isCloudReady()) {
+        if (!isSilent) setAmzCloudStatus("請先在「設定」填寫雲端資料。", true);
+        return;
+      }
+      try {
+        if (!isSilent) setAmzCloudStatus("推送 Amazon 到雲端中...");
+        for (let i = 0; i < amazonItems.length; i++) {
+          await upsertAmazonItemToCloud(amazonItems[i]);
+        }
+        rememberLastUsedCloudConfig();
+        if (!isSilent) setAmzCloudStatus("Amazon 推送完成，共 " + amazonItems.length + " 筆。");
+      } catch (error) {
+        if (!isSilent) setAmzCloudStatus("Amazon 推送失敗：" + error.message, true);
+        throw error;
+      }
+    }
+
+    async function addAmazonItem() {
+      const nameInput = document.getElementById("amzName");
+      const costInput = document.getElementById("amzCost");
+      const linkInput = document.getElementById("amzLink");
+      const name = nameInput.value.trim();
+      const cost = Number(costInput.value);
+      const link = linkInput.value.trim();
+      if (!name || !Number.isFinite(cost) || cost <= 0) {
+        alert("請填寫商品名稱與正確成本");
+        return;
+      }
+      const newItem = {
+        id: Date.now(),
+        name: name,
+        cost: cost,
+        refund: 0,
+        status: "ordered",
+        date: new Date().toISOString(),
+        link: link
+      };
+      amazonItems.unshift(newItem);
+      saveAmazon();
+      nameInput.value = "";
+      costInput.value = "";
+      linkInput.value = "";
+      renderAmazon();
+      try {
+        await upsertAmazonItemToCloud(newItem);
+        if (isCloudReady()) setAmzCloudStatus("新增已同步到 Amazon 雲端。");
+      } catch (error) {
+        setAmzCloudStatus("本機已存，但 Amazon 雲端同步失敗：" + error.message, true);
+      }
+    }
+
+    async function updateStatus(id) {
+      const item = amazonItems.find(function(i) { return i.id == id; });
+      if (!item) return;
+      if (item.status === "ordered") item.status = "received";
+      else if (item.status === "received") item.status = "reviewed";
+      else if (item.status === "reviewed") item.status = "refunded";
+      saveAmazon();
+      renderAmazon();
+      try {
+        await upsertAmazonItemToCloud(item);
+        if (isCloudReady()) setAmzCloudStatus("狀態已同步到 Amazon 雲端。");
+      } catch (error) {
+        setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+      }
+    }
+
+    async function setRefund(id) {
+      const amount = prompt("輸入退款金額：");
+      const item = amazonItems.find(function(i) { return i.id == id; });
+      if (!item) return;
+      if (amount == null || String(amount).trim() === "") return;
+      const n = Number(amount);
+      if (!Number.isFinite(n) || n < 0) {
+        alert("請輸入正確金額");
+        return;
+      }
+      item.refund = n;
+      saveAmazon();
+      renderAmazon();
+      try {
+        await upsertAmazonItemToCloud(item);
+        if (isCloudReady()) setAmzCloudStatus("退款已同步到 Amazon 雲端。");
+      } catch (error) {
+        setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+      }
+    }
+
+    async function deleteAmazonItem(id) {
+      const item = amazonItems.find(function(i) { return i.id == id; });
+      if (!item) return;
+      if (!confirm("確定刪除「" + item.name + "」嗎？")) return;
+      const sid = String(id);
+      amazonItems = amazonItems.filter(function(i) { return String(i.id) !== sid; });
+      saveAmazon();
+      renderAmazon();
+      try {
+        await deleteAmazonItemFromCloud(sid);
+        if (isCloudReady()) setAmzCloudStatus("刪除已同步到 Amazon 雲端。");
+      } catch (error) {
+        setAmzCloudStatus("本機已刪除，但 Amazon 雲端刪除失敗：" + error.message, true);
+      }
+    }
+
+    function getDaysPassed(date) {
+      const t = new Date(date).getTime();
+      if (isNaN(t)) return 0;
+      const diff = Date.now() - t;
+      return Math.floor(diff / (1000 * 60 * 60 * 24));
+    }
+
+    function getStatusColor(status) {
+      if (status === "ordered") return "#ef4444";
+      if (status === "received") return "#f59e0b";
+      if (status === "reviewed") return "#3b82f6";
+      if (status === "refunded") return "#22c55e";
+      return "#64748b";
+    }
+
+    function safeAmazonHref(link) {
+      const s = String(link || "").trim();
+      if (/^https?:\/\//i.test(s)) return s;
+      return "";
+    }
+
+    function renderAmazon() {
+      const list = document.getElementById("amzList");
+      const emptyAmz = document.getElementById("amzEmptyState");
+      if (!list) return;
+
+      list.innerHTML = "";
+
+      let totalCost = 0;
+      let totalRefund = 0;
+      let completed = 0;
+      let cntArrived = 0;
+      let cntNotArrived = 0;
+      let cntReviewed = 0;
+      let cntNotReviewed = 0;
+      let cntHasRefund = 0;
+      let cntNoRefund = 0;
+      let cntDone = 0;
+
+      amazonItems.forEach(function(item) {
+        totalCost += item.cost;
+        totalRefund += item.refund;
+        if (item.status === "refunded") completed++;
+
+        if (item.status !== "ordered") cntArrived++;
+        if (item.status === "ordered") cntNotArrived++;
+        if (item.status === "reviewed" || item.status === "refunded") cntReviewed++;
+        if (item.status === "ordered" || item.status === "received") cntNotReviewed++;
+        if (Number(item.refund || 0) > 0) cntHasRefund++;
+        else cntNoRefund++;
+        if (item.status === "refunded") cntDone++;
+
+        const days = getDaysPassed(item.date);
+        let warning = "";
+        if (item.status !== "refunded" && days > 5) {
+          warning = "⚠️ 超過5天未完成";
+        }
+        if (item.status === "reviewed" && item.refund === 0) {
+          warning = "💸 還沒退款！";
+        }
+
+        const href = safeAmazonHref(item.link);
+        const linkBlock = href
+          ? '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">開啟商品連結</a>'
+          : '<span style="color:var(--muted);">（未填連結）</span>';
+
+        const warnHtml = warning ? '<div class="amz-warn">' + escapeHtml(warning) + "</div>" : "";
+
+        const card = document.createElement("article");
+        card.className = "item-card amz-card";
+        card.innerHTML =
+          '<div class="emoji">🛒</div>' +
+          '<div class="item-name">' + escapeHtml(item.name) + "</div>" +
+          '<div style="text-align:center;margin-bottom:8px;">' +
+          '<span class="tag" style="background:' +
+          getStatusColor(item.status) +
+          ';border-color:rgba(15,23,42,0.35);color:#fff;">' +
+          escapeHtml(item.status) +
+          "</span></div>" +
+          '<div class="meta">成本：' + formatMoney(item.cost) + "</div>" +
+          '<div class="meta">退款：' + formatMoney(item.refund) + "</div>" +
+          '<div class="meta">天數：' + days + " 天</div>" +
+          warnHtml +
+          '<div class="meta" style="text-align:center;">' + linkBlock + "</div>" +
+          '<div class="btn-row amz-card-actions" style="margin-top:10px;flex-wrap:wrap;justify-content:center;gap:8px;"></div>';
+
+        const row = card.querySelector(".amz-card-actions");
+        const nextBtn = document.createElement("button");
+        nextBtn.type = "button";
+        nextBtn.className = "btn secondary";
+        nextBtn.textContent = "下一步";
+        nextBtn.addEventListener("click", function(event) {
+          event.stopPropagation();
+          updateStatus(item.id);
+        });
+        if (item.status === "refunded") nextBtn.disabled = true;
+
+        const refundBtn = document.createElement("button");
+        refundBtn.type = "button";
+        refundBtn.className = "btn primary";
+        refundBtn.textContent = "填退款";
+        refundBtn.addEventListener("click", function(event) {
+          event.stopPropagation();
+          setRefund(item.id);
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "btn warn";
+        delBtn.textContent = "刪除";
+        delBtn.addEventListener("click", function(event) {
+          event.stopPropagation();
+          deleteAmazonItem(item.id);
+        });
+
+        row.appendChild(nextBtn);
+        row.appendChild(refundBtn);
+        row.appendChild(delBtn);
+
+        list.appendChild(card);
+      });
+
+      if (emptyAmz) emptyAmz.hidden = amazonItems.length > 0;
+
+      const expenseEl = document.getElementById("amzExpense");
+      const refundEl = document.getElementById("amzRefund");
+      const profitEl = document.getElementById("amzProfit");
+      const rateEl = document.getElementById("amzRate");
+      if (expenseEl) expenseEl.textContent = formatMoney(totalCost);
+      if (refundEl) refundEl.textContent = formatMoney(totalRefund);
+      if (profitEl) {
+        const profit = totalRefund - totalCost;
+        profitEl.textContent = formatMoney(profit);
+        profitEl.className = "value " + (profit >= 0 ? "profit" : "loss");
+      }
+      if (rateEl) {
+        const rate = amazonItems.length ? Math.round((completed / amazonItems.length) * 100) : 0;
+        rateEl.textContent = rate + "%";
+      }
+
+      const totalN = amazonItems.length;
+      function setAmzCount(id, n) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(n);
+      }
+      setAmzCount("amzCntTotal", totalN);
+      setAmzCount("amzCntArrived", cntArrived);
+      setAmzCount("amzCntNotArrived", cntNotArrived);
+      setAmzCount("amzCntReviewed", cntReviewed);
+      setAmzCount("amzCntNotReviewed", cntNotReviewed);
+      setAmzCount("amzCntHasRefund", cntHasRefund);
+      setAmzCount("amzCntNoRefund", cntNoRefund);
+      setAmzCount("amzCntDone", cntDone);
+    }
+
+    const amzAddBtn = document.getElementById("amzAddBtn");
+    if (amzAddBtn) amzAddBtn.addEventListener("click", addAmazonItem);
+    const amzPullCloudBtn = document.getElementById("amzPullCloudBtn");
+    const amzPushCloudBtn = document.getElementById("amzPushCloudBtn");
+    if (amzPullCloudBtn) amzPullCloudBtn.addEventListener("click", function() { pullAmazonFromCloud({ silent: false }); });
+    if (amzPushCloudBtn) amzPushCloudBtn.addEventListener("click", function() { pushAllAmazonToCloud(false); });
+
+    function goPage(page) {
+      document.getElementById("homePage").style.display = "none";
+      document.getElementById("tradingPage").style.display = "none";
+      document.getElementById("amazonPage").style.display = "none";
+      document.getElementById("legoPage").style.display = "none";
+
+      if (page === "home") {
+        document.getElementById("homePage").style.display = "block";
+      }
+      if (page === "trading") {
+        document.getElementById("tradingPage").style.display = "block";
+      }
+      if (page === "amazon") {
+        document.getElementById("amazonPage").style.display = "block";
+        renderAmazon();
+      }
+      if (page === "lego") {
+        document.getElementById("legoPage").style.display = "block";
+      }
+    }
+
+    (async function() {
+      setAmzCloudStatus(
+        isCloudReady()
+          ? "已連線雲端；可載入／推送 Amazon（Supabase 需有 amazon_items 表）。"
+          : "請先在「收藏買賣」→ 設定填寫同一組 Supabase。",
+        false
+      );
+      if (isCloudReady()) {
+        await pullAmazonFromCloud({ silent: true });
+      }
+      renderAmazon();
+      goPage("home");
+    })();
   </script>
 </body>
 </html>
