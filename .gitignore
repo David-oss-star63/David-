@@ -1,0 +1,5 @@
+# Local secrets — never commit
+.env
+
+# Generated from .env on your machine (optional; omit if you only edit env file by hand)
+config/supabase-env.local.js

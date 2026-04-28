@@ -4,13 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>David's 收藏買賣管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="homePage" class="container">
-    <h1>我的收藏系統</h1>
-    <div class="panel">
-      <div class="btn-row menu">
+  <div id="homePage" class="container home-shell">
+    <header class="home-header">
+      <p class="home-eyebrow">David Collection</p>
+      <h1 class="home-title">我的收藏系統</h1>
+      <p class="home-lede">集中管理收藏買賣、Amazon 測評與 LEGO 區塊。</p>
+    </header>
+    <div class="panel home-hub-panel">
+      <div class="btn-row menu home-actions">
         <button class="btn primary" onclick="goPage('trading')">收藏買賣</button>
         <button class="btn secondary" onclick="goPage('amazon')">Amazon測評</button>
         <button class="btn secondary" onclick="goPage('lego')">LEGO收藏</button>
@@ -22,7 +29,7 @@
     <div class="trading-layout">
     <aside class="trading-sidebar" aria-label="收藏買賣選單">
       <div class="trading-top-actions">
-      <button type="button" class="btn secondary trading-back-btn trading-nav-equal" onclick="goPage('home')">⬅ 返回首頁</button>
+      <button type="button" class="btn secondary trading-back-btn trading-nav-equal" onclick="goPage('home')">返回首頁</button>
       <div class="trading-options-wrap">
         <div class="trading-options-btn-col">
         <button type="button" id="tradingOptionsToggleBtn" class="btn primary trading-nav-equal">選項</button>
@@ -40,7 +47,10 @@
 
     <div class="trading-main-area">
       <div class="container trading-main-inner">
-      <h1 style="margin: 0 0 14px;">我的收藏管理</h1>
+      <header class="page-heading">
+        <h1 class="page-title">我的收藏管理</h1>
+        <p class="page-subtitle">追蹤買賣、持有數量與損益總覽</p>
+      </header>
       <div class="panel top-panel trading-stats-panel">
       <div class="stat"><div class="label">收藏總數</div><div id="countValue" class="value">0</div></div>
       <div class="stat"><div class="label">目前持有數</div><div id="holdingValue" class="value">0</div></div>
@@ -145,7 +155,7 @@
   <dialog id="detailModal">
     <div class="modal-header">
       <h2 id="modalTitle" class="modal-title">收藏資訊</h2>
-      <button id="closeModalBtn" class="btn secondary" style="padding:6px 10px; width:auto;">關閉</button>
+      <button type="button" id="closeModalBtn" class="btn secondary modal-close-btn">關閉</button>
     </div>
     <div id="modalBody" class="modal-body"></div>
     <div class="modal-footer">
@@ -159,10 +169,12 @@
   </div>
 
   <div id="amazonPage" style="display:none;">
-    <div class="container">
-      <button class="btn secondary" onclick="goPage('home')" style="width:auto; margin-bottom: 10px;">⬅ 返回首頁</button>
-      <h1>Amazon測評</h1>
-      <p style="color: var(--muted); margin: 0 0 14px; font-size: 0.95rem;">追蹤訂單流程、成本／退款、天數提醒與完成率。</p>
+    <div class="container subpage-shell">
+      <button type="button" class="btn secondary nav-back" onclick="goPage('home')">返回首頁</button>
+      <header class="page-heading">
+        <h1 class="page-title">Amazon測評</h1>
+        <p class="page-subtitle">追蹤訂單流程、成本／退款、天數提醒與完成率。</p>
+      </header>
 
       <div class="panel top-panel" style="margin-bottom: 14px;">
         <div class="stat"><div class="label">總支出</div><div id="amzExpense" class="value">$0</div></div>
@@ -210,13 +222,17 @@
   </div>
 
   <div id="legoPage" style="display:none;">
-    <div class="container">
-      <button class="btn secondary" onclick="goPage('home')" style="width:auto; margin-bottom: 10px;">⬅ 返回首頁</button>
-      <h1>LEGO收藏</h1>
-      <div class="panel">這個頁面先預留，之後可加入 LEGO 收藏功能。</div>
+    <div class="container subpage-shell">
+      <button type="button" class="btn secondary nav-back" onclick="goPage('home')">返回首頁</button>
+      <header class="page-heading">
+        <h1 class="page-title">LEGO收藏</h1>
+        <p class="page-subtitle">此區塊預留，之後可擴充 LEGO 收藏功能。</p>
+      </header>
+      <div class="panel lego-placeholder-panel">這個頁面先預留，之後可加入 LEGO 收藏功能。</div>
     </div>
   </div>
 
+  <script src="config/supabase-env.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

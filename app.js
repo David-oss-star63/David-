@@ -5,7 +5,7 @@ const CLOUD_LAST_USED_KEY = "collection_cloud_last_used_v1";
 const ARROW_ICON_URL =
   "data:image/svg+xml," +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M6 15l6-6 6 6" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M6 15l6-6 6 6" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   );
 const icons = {
   鞋子: "👟",
@@ -191,6 +191,67 @@ function loadCloudConfig() {
   }
 }
 
+function readEnvDefaults() {
+  if (typeof window === "undefined") return null;
+  const e = window.__SUPABASE_ENV__;
+  if (!e || typeof e !== "object") return null;
+  return {
+    url: String(e.SUPABASE_URL || e.supabaseUrl || "").trim().replace(/\/+$/, ""),
+    key: String(e.SUPABASE_ANON_KEY || e.supabaseAnonKey || "").trim(),
+    owner: String(e.SUPABASE_OWNER || e.COLLECTION_OWNER || e.collectionOwner || e.owner || "").trim()
+  };
+}
+
+function persistCloudConfigSilently() {
+  try {
+    localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  } catch (_) {
+    /* file:// / private mode often blocks storage — rely on config/supabase-env.js next load */
+  }
+}
+
+/** When .env-derived JS omits keys, merge only gaps. */
+function mergePartialEnvIntoCloudConfig() {
+  const env = readEnvDefaults();
+  if (!env) return;
+  let changed = false;
+  if (!cloudConfig.url && env.url) {
+    cloudConfig.url = env.url;
+    changed = true;
+  }
+  if (!cloudConfig.key && env.key) {
+    cloudConfig.key = env.key;
+    changed = true;
+  }
+  if (!cloudConfig.owner && env.owner) {
+    cloudConfig.owner = env.owner;
+    changed = true;
+  }
+  if (changed && isCloudReady()) {
+    persistCloudConfigSilently();
+  }
+}
+
+/**
+ * Prefer full window.__SUPABASE_ENV__ when three fields are filled (helps file:// opens where
+ * localStorage may not persist). If local cache is complete already, keep it unless ALWAYS_USE_ENV.
+ */
+function initCloudConfigFromEnv() {
+  cloudConfig = loadCloudConfig();
+  const env = readEnvDefaults();
+  const envComplete = Boolean(env && env.url && env.key && env.owner);
+  const savedComplete = !!(cloudConfig.url && cloudConfig.key && cloudConfig.owner);
+  const rawEnv = typeof window !== "undefined" ? window.__SUPABASE_ENV__ : null;
+  const alwaysEnv = Boolean(rawEnv && rawEnv.ALWAYS_USE_ENV);
+
+  if (envComplete && (alwaysEnv || !savedComplete)) {
+    cloudConfig = { url: env.url, key: env.key, owner: env.owner };
+    persistCloudConfigSilently();
+    return;
+  }
+  mergePartialEnvIntoCloudConfig();
+}
+
 function loadLastUsedCloudConfig() {
   const raw = localStorage.getItem(CLOUD_LAST_USED_KEY);
   if (!raw) return null;
@@ -233,7 +294,7 @@ function refreshCloudConfigFromInputs() {
 
 function saveCloudConfig() {
   refreshCloudConfigFromInputs();
-  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  persistCloudConfigSilently();
   rememberLastUsedCloudConfig();
   setCloudStatus(isCloudReady() ? "雲端設定已儲存，可載入/同步。" : "雲端設定不完整。");
 }
@@ -245,7 +306,7 @@ function useLastCloudConfig() {
     return;
   }
   applyCloudConfigToInputs(last);
-  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  persistCloudConfigSilently();
   setCloudStatus("已套用上次使用設定。");
 }
 
@@ -955,7 +1016,7 @@ modal.addEventListener("click", function(event) {
   if (!inside) modal.close();
 });
 
-cloudConfig = loadCloudConfig();
+initCloudConfigFromEnv();
 cloudUrlInput.value = cloudConfig.url;
 cloudKeyInput.value = cloudConfig.key;
 cloudOwnerInput.value = cloudConfig.owner;
