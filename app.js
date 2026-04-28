@@ -1,0 +1,1364 @@
+﻿const STORAGE_KEY = "collection_items_v2";
+const LEGACY_KEY = "collection_items_v1";
+const CLOUD_CONFIG_KEY = "collection_cloud_config_v1";
+const CLOUD_LAST_USED_KEY = "collection_cloud_last_used_v1";
+const ARROW_ICON_URL =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M6 15l6-6 6 6" fill="none" stroke="#be185d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  );
+const icons = {
+  鞋子: "👟",
+  公仔: "🧸",
+  收藏品: "📦",
+  "ETB": "📮",
+  "Pokemon center ETB": "🎁",
+  "Pokemon TCG": "🃏",
+  "Pokemon Display Box ( 36 packs )": "📚",
+  "Pokemon TCG Bundle": "🧩"
+};
+function createId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
+
+const defaultItems = [
+  { id: createId(), displayOrder: 1, name: "Jordan 1 Chicago", category: "鞋子", buyPrice: 9800, buyDate: "2026-03-12", source: "SNKRS", note: "首發入手", image: "", sold: false, sellPrice: null, sellDate: null },
+  { id: createId(), displayOrder: 2, name: "海賊王 魯夫 GK", category: "公仔", buyPrice: 5200, buyDate: "2026-02-01", source: "蝦皮", note: "全新未拆", image: "", sold: true, sellPrice: 6800, sellDate: "2026-04-03" }
+];
+
+const itemsGrid = document.getElementById("itemsGrid");
+const emptyState = document.getElementById("emptyState");
+const modal = document.getElementById("detailModal");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const markSoldBtn = document.getElementById("markSoldBtn");
+const editBtn = document.getElementById("editBtn");
+const deleteBtn = document.getElementById("deleteBtn");
+const closeModalBtn = document.getElementById("closeModalBtn");
+
+const nameInput = document.getElementById("nameInput");
+const categoryInput = document.getElementById("categoryInput");
+const priceInput = document.getElementById("priceInput");
+const qtyInput = document.getElementById("qtyInput");
+const soldQtyInput = document.getElementById("soldQtyInput");
+const sizeInput = document.getElementById("sizeInput");
+const sizeField = sizeInput ? sizeInput.closest(".field") : null;
+const cardToneInput = document.getElementById("cardToneInput");
+const dateInput = document.getElementById("dateInput");
+const sourceInput = document.getElementById("sourceInput");
+const noteInput = document.getElementById("noteInput");
+const imageInput = document.getElementById("imageInput");
+const addFormSection = document.getElementById("addFormSection");
+const addBtn = document.getElementById("addBtn");
+const saveEditBtn = document.getElementById("saveEditBtn");
+const cancelEditBtn = document.getElementById("cancelEditBtn");
+
+const searchInput = document.getElementById("searchInput");
+const filterCategory = document.getElementById("filterCategory");
+const filterStatus = document.getElementById("filterStatus");
+const exportCsvBtn = document.getElementById("exportCsvBtn");
+const clearFiltersBtn = document.getElementById("clearFiltersBtn");
+const cloudUrlInput = document.getElementById("cloudUrlInput");
+const cloudKeyInput = document.getElementById("cloudKeyInput");
+const cloudOwnerInput = document.getElementById("cloudOwnerInput");
+const saveCloudConfigBtn = document.getElementById("saveCloudConfigBtn");
+const useLastCloudBtn = document.getElementById("useLastCloudBtn");
+const pullCloudBtn = document.getElementById("pullCloudBtn");
+const pushCloudBtn = document.getElementById("pushCloudBtn");
+const safeSyncBtn = document.getElementById("safeSyncBtn");
+const cloudStatus = document.getElementById("cloudStatus");
+
+const countValue = document.getElementById("countValue");
+const holdingValue = document.getElementById("holdingValue");
+const buyValue = document.getElementById("buyValue");
+const sellValue = document.getElementById("sellValue");
+const profitValue = document.getElementById("profitValue");
+
+let items = [];
+let selectedId = null;
+let editingId = null;
+let pendingImageData = "";
+let isAddFormOpen = false;
+let isOptionsPanelOpen = false;
+let cloudConfig = { url: "", key: "", owner: "" };
+
+function formatMoney(value) { return "$" + Number(value || 0).toLocaleString("zh-TW"); }
+
+function normalizeCategory(category) {
+  if (category === "Pokemon ETB") return "ETB";
+  return category || "收藏品";
+}
+
+function normalizeCardTone(tone) {
+  const rawTone = String(tone || "normal");
+  const valid = ["normal", "platinum", "rosegold", "gold", "silver"];
+  if (valid.includes(rawTone)) return rawTone;
+  if (rawTone === "gold-gloss") return "gold";
+  if (rawTone === "silver-gloss") return "silver";
+  return "normal";
+}
+
+function getCardToneLabel(tone) {
+  if (tone === "platinum") return "白金色";
+  if (tone === "rosegold") return "玫瑰金色";
+  if (tone === "gold") return "金色";
+  if (tone === "silver") return "銀色";
+  return "一般沒有顏色";
+}
+
+function getCardToneRank(tone) {
+  if (tone === "platinum") return 1;
+  if (tone === "rosegold") return 2;
+  if (tone === "gold") return 3;
+  if (tone === "silver") return 4;
+  return 5;
+}
+
+function normalizeItem(item) {
+  const cardTone = normalizeCardTone(item.cardTone);
+  const qty = Math.max(1, Number(item.qty || 1));
+  const legacySoldQty = item.sold ? qty : 0;
+  const soldQty = Math.min(qty, Math.max(0, Number(item.soldQty == null ? legacySoldQty : item.soldQty)));
+  return {
+    id: item.id || createId(),
+    displayOrder: Number(item.displayOrder || 0),
+    name: item.name || "",
+    category: normalizeCategory(item.category),
+    cardTone: cardTone,
+    size: item.size ? String(item.size) : "",
+    buyPrice: Number(item.buyPrice || 0),
+    qty: qty,
+    buyDate: item.buyDate || "",
+    source: item.source || "",
+    note: item.note || "",
+    image: item.image || "",
+    soldQty: soldQty,
+    sold: soldQty >= qty,
+    sellPrice: item.sellPrice == null ? null : Number(item.sellPrice),
+    sellDate: item.sellDate || null
+  };
+}
+
+function withNormalizedOrder(list) {
+  const hasOrder = list.every(function(item) {
+    return Number.isFinite(item.displayOrder) && item.displayOrder > 0;
+  });
+  const base = hasOrder ? list.slice().sort(function(a, b) { return a.displayOrder - b.displayOrder; }) : list.slice();
+  return base.map(function(item, index) {
+    return { ...item, displayOrder: index + 1 };
+  });
+}
+
+function reindexItemOrder() {
+  items = items.map(function(item, index) {
+    return { ...item, displayOrder: index + 1 };
+  });
+}
+
+function loadItems() {
+  const rawCurrent = localStorage.getItem(STORAGE_KEY);
+  const rawLegacy = localStorage.getItem(LEGACY_KEY);
+  const seed = rawCurrent || rawLegacy;
+  if (!seed) return withNormalizedOrder(defaultItems.map(normalizeItem));
+  try {
+    const parsed = JSON.parse(seed);
+    if (!Array.isArray(parsed)) return withNormalizedOrder(defaultItems.map(normalizeItem));
+    return withNormalizedOrder(parsed.map(normalizeItem));
+  } catch {
+    return withNormalizedOrder(defaultItems.map(normalizeItem));
+  }
+}
+
+function saveItems() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function loadCloudConfig() {
+  const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
+  if (!raw) return { url: "", key: "", owner: "" };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      url: String(parsed.url || "").trim(),
+      key: String(parsed.key || "").trim(),
+      owner: String(parsed.owner || "").trim()
+    };
+  } catch {
+    return { url: "", key: "", owner: "" };
+  }
+}
+
+function loadLastUsedCloudConfig() {
+  const raw = localStorage.getItem(CLOUD_LAST_USED_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const cfg = {
+      url: String(parsed.url || "").trim(),
+      key: String(parsed.key || "").trim(),
+      owner: String(parsed.owner || "").trim()
+    };
+    return (cfg.url && cfg.key && cfg.owner) ? cfg : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberLastUsedCloudConfig() {
+  if (!isCloudReady()) return;
+  localStorage.setItem(CLOUD_LAST_USED_KEY, JSON.stringify(cloudConfig));
+}
+
+function applyCloudConfigToInputs(config) {
+  cloudUrlInput.value = config.url;
+  cloudKeyInput.value = config.key;
+  cloudOwnerInput.value = config.owner;
+  cloudConfig = {
+    url: config.url.trim().replace(/\/+$/, ""),
+    key: config.key.trim(),
+    owner: config.owner.trim()
+  };
+}
+
+function refreshCloudConfigFromInputs() {
+  cloudConfig = {
+    url: cloudUrlInput.value.trim().replace(/\/+$/, ""),
+    key: cloudKeyInput.value.trim(),
+    owner: cloudOwnerInput.value.trim()
+  };
+}
+
+function saveCloudConfig() {
+  refreshCloudConfigFromInputs();
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  rememberLastUsedCloudConfig();
+  setCloudStatus(isCloudReady() ? "雲端設定已儲存，可載入/同步。" : "雲端設定不完整。");
+}
+
+function useLastCloudConfig() {
+  const last = loadLastUsedCloudConfig();
+  if (!last) {
+    setCloudStatus("沒有可用的上次使用設定。", true);
+    return;
+  }
+  applyCloudConfigToInputs(last);
+  localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+  setCloudStatus("已套用上次使用設定。");
+}
+
+function isCloudReady() {
+  return Boolean(cloudConfig.url && cloudConfig.key && cloudConfig.owner);
+}
+
+function setCloudStatus(message, isError) {
+  cloudStatus.textContent = message;
+  cloudStatus.style.color = isError ? "#b91c1c" : "#475569";
+}
+
+async function supabaseRequest(method, path, body, extraHeaders) {
+  const headers = {
+    "apikey": cloudConfig.key,
+    "Authorization": "Bearer " + cloudConfig.key,
+    ...extraHeaders
+  };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(cloudConfig.url + "/rest/v1/" + path, {
+    method: method,
+    headers: headers,
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Supabase " + res.status + " " + text);
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error("Supabase 回傳格式錯誤：" + error.message);
+  }
+}
+
+async function upsertItemToCloud(item) {
+  if (!isCloudReady()) return;
+  await supabaseRequest(
+    "POST",
+    "collection_items?on_conflict=owner_id,item_id",
+    [{ owner_id: cloudConfig.owner, item_id: item.id, item_json: item }],
+    { "Prefer": "resolution=merge-duplicates,return=minimal" }
+  );
+}
+
+async function deleteItemFromCloud(itemId) {
+  if (!isCloudReady()) return;
+  await supabaseRequest(
+    "DELETE",
+    "collection_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&item_id=eq." + encodeURIComponent(itemId),
+    undefined,
+    { "Prefer": "return=minimal" }
+  );
+}
+
+async function pullCloudItems(isAuto, throwOnError) {
+  if (!isAuto) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    setCloudStatus("請先填 Supabase URL / Anon Key / 帳本代號。", true);
+    return;
+  }
+  try {
+    setCloudStatus(isAuto ? "自動載入雲端資料中..." : "載入雲端資料中...");
+    const rows = await supabaseRequest(
+      "GET",
+      "collection_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&select=item_json",
+      undefined
+    );
+    const cloudItems = Array.isArray(rows) ? rows.map(function(row) { return normalizeItem(row.item_json || {}); }) : [];
+    items = withNormalizedOrder(cloudItems);
+    saveItems();
+    rememberLastUsedCloudConfig();
+    renderItems();
+    setCloudStatus((isAuto ? "已自動載入雲端資料，共 " : "已載入雲端資料，共 ") + items.length + " 筆。");
+  } catch (error) {
+    setCloudStatus((isAuto ? "自動載入雲端失敗：" : "載入雲端失敗：") + error.message, true);
+    if (throwOnError) throw error;
+  }
+}
+
+async function pushAllToCloud(isSilent) {
+  if (!isSilent) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    if (!isSilent) setCloudStatus("請先填 Supabase URL / Anon Key / 帳本代號。", true);
+    return;
+  }
+  try {
+    if (!isSilent) setCloudStatus("推送本機資料到雲端中...");
+    for (const item of items) {
+      await upsertItemToCloud(item);
+    }
+    rememberLastUsedCloudConfig();
+    if (!isSilent) setCloudStatus("推送完成，共同步 " + items.length + " 筆。");
+  } catch (error) {
+    if (!isSilent) setCloudStatus("推送雲端失敗：" + error.message, true);
+    throw error;
+  }
+}
+
+async function safeSyncCloud() {
+  if (!isCloudReady()) {
+    setCloudStatus("請先填 Supabase URL / Anon Key / 帳本代號。", true);
+    return;
+  }
+  try {
+    setCloudStatus("安全同步中：先載入雲端，再推送本機（含 Amazon）...");
+    await pullCloudItems(false, true);
+    await pullAmazonFromCloud({ silent: true, throwOnError: true });
+    await pushAllToCloud(true);
+    await pushAllAmazonToCloud(true);
+    setCloudStatus(
+      "安全同步完成：收藏 " + items.length + " 筆；Amazon " + amazonItems.length + " 筆。"
+    );
+  } catch (error) {
+    setCloudStatus("安全同步失敗：" + error.message, true);
+  }
+}
+
+function calcRealizedProfit() {
+  return items.filter(function(item) { return Number(item.soldQty || 0) > 0; }).reduce(function(sum, item) {
+    return sum + ((Number(item.sellPrice || 0) - Number(item.buyPrice || 0)) * Number(item.soldQty || 0));
+  }, 0);
+}
+
+function updateStats() {
+  const totalPieces = items.reduce(function(sum, item) {
+    return sum + Math.max(1, Number(item.qty || 1));
+  }, 0);
+  const holdingPieces = items.reduce(function(sum, item) {
+    const qty = Math.max(1, Number(item.qty || 1));
+    const soldQty = Math.min(qty, Math.max(0, Number(item.soldQty || 0)));
+    return sum + Math.max(0, qty - soldQty);
+  }, 0);
+  countValue.textContent = String(totalPieces);
+  holdingValue.textContent = String(holdingPieces);
+  buyValue.textContent = formatMoney(items.reduce(function(sum, item) {
+    return sum + (Number(item.buyPrice || 0) * Number(item.qty || 1));
+  }, 0));
+  sellValue.textContent = formatMoney(items.filter(function(item) { return Number(item.soldQty || 0) > 0; }).reduce(function(sum, item) {
+    return sum + (Number(item.sellPrice || 0) * Number(item.soldQty || 0));
+  }, 0));
+  const realized = calcRealizedProfit();
+  profitValue.textContent = formatMoney(realized);
+  profitValue.className = "value " + (realized >= 0 ? "profit" : "loss");
+}
+
+function getFilteredItems() {
+  const q = searchInput.value.trim().toLowerCase();
+  const cat = filterCategory.value;
+  const status = filterStatus.value;
+  return items.filter(function(item) {
+    const passSearch = !q || item.name.toLowerCase().includes(q) || item.source.toLowerCase().includes(q);
+    const passCategory = cat === "全部" || item.category === cat;
+    const soldQty = Number(item.soldQty || 0);
+    const qty = Number(item.qty || 1);
+    const passStatus = status === "全部"
+      || (status === "持有中" && soldQty === 0)
+      || (status === "已賣出" && soldQty >= qty);
+    return passSearch && passCategory && passStatus;
+  }).sort(function(a, b) {
+    const toneDiff = getCardToneRank(a.cardTone) - getCardToneRank(b.cardTone);
+    if (toneDiff !== 0) return toneDiff;
+    return Number(a.displayOrder || 0) - Number(b.displayOrder || 0);
+  });
+}
+
+function renderCardImage(item) {
+  if (item.image) return '<img class="thumb card-media" src="' + item.image + '" alt="' + escapeHtml(item.name) + '">';
+  return '<div class="emoji card-media">' + (icons[item.category] || "📦") + "</div>";
+}
+
+function renderItems() {
+  const filtered = getFilteredItems();
+  itemsGrid.innerHTML = "";
+  emptyState.hidden = filtered.length > 0;
+  filtered.forEach(function(item) {
+    const itemIndex = items.findIndex(function(x) { return x.id === item.id; });
+    const qty = Number(item.qty || 1);
+    const soldQty = Number(item.soldQty || 0);
+    const statusText = soldQty >= qty ? "已賣出" : (soldQty > 0 ? ("部分賣出（" + soldQty + "/" + qty + "）") : "持有中");
+    const card = document.createElement("article");
+    card.className = "item-card";
+    if (item.cardTone === "platinum") card.classList.add("tone-platinum");
+    if (item.cardTone === "rosegold") card.classList.add("tone-rosegold");
+    if (item.cardTone === "gold") card.classList.add("tone-gold");
+    if (item.cardTone === "silver") card.classList.add("tone-silver");
+    card.innerHTML =
+      renderCardImage(item) +
+      '<div class="item-name">' + escapeHtml(item.name) + "</div>" +
+      '<div class="tag">' + item.category + "</div>" +
+      (item.category === "鞋子" && item.size ? '<div class="meta">Size：' + escapeHtml(item.size) + "</div>" : "") +
+      '<div class="meta">單價：' + formatMoney(item.buyPrice) + "</div>" +
+      '<div class="meta">數量：' + qty + "</div>" +
+      '<div class="meta">買入總額：' + formatMoney(Number(item.buyPrice || 0) * qty) + "</div>" +
+      '<div class="meta">日期：' + (item.buyDate || "-") + "</div>" +
+      '<div class="meta">狀態：' + statusText + "</div>" +
+      '<div class="card-order-actions">' +
+      '<button class="order-btn move-up-btn" title="上移" ' + (itemIndex <= 0 ? "disabled" : "") + '><img class="arrow-icon" src="' + ARROW_ICON_URL + '" alt="上移"></button>' +
+      '<button class="order-btn move-down-btn" title="下移" ' + (itemIndex >= items.length - 1 ? "disabled" : "") + '><img class="arrow-icon down" src="' + ARROW_ICON_URL + '" alt="下移"></button>' +
+      "</div>";
+    const upBtn = card.querySelector(".move-up-btn");
+    const downBtn = card.querySelector(".move-down-btn");
+    const media = card.querySelector(".card-media");
+    if (media) {
+      media.addEventListener("click", function(event) {
+        event.stopPropagation();
+        beginEdit(item.id);
+      });
+    }
+    if (upBtn) {
+      upBtn.addEventListener("click", function(event) {
+        event.stopPropagation();
+        moveItem(item.id, -1);
+      });
+    }
+    if (downBtn) {
+      downBtn.addEventListener("click", function(event) {
+        event.stopPropagation();
+        moveItem(item.id, 1);
+      });
+    }
+    card.addEventListener("click", function() { openDetail(item.id); });
+    itemsGrid.appendChild(card);
+  });
+  updateStats();
+}
+
+async function moveItem(id, direction) {
+  const index = items.findIndex(function(item) { return item.id === id; });
+  if (index < 0) return;
+  const target = index + direction;
+  if (target < 0 || target >= items.length) return;
+  const temp = items[index];
+  items[index] = items[target];
+  items[target] = temp;
+  reindexItemOrder();
+  saveItems();
+  renderItems();
+  if (isCloudReady()) {
+    try {
+      await pushAllToCloud(true);
+      setCloudStatus("卡片順序已同步到雲端。");
+    } catch (error) {
+      setCloudStatus("卡片順序已更新，但雲端同步失敗：" + error.message, true);
+    }
+  }
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function openDetail(id) {
+  selectedId = id;
+  const item = items.find(function(x) { return x.id === id; });
+  if (!item) return;
+  const qty = Number(item.qty || 1);
+  const soldQty = Number(item.soldQty || 0);
+  const remainingQty = Math.max(0, qty - soldQty);
+  const buyTotal = Number(item.buyPrice || 0) * qty;
+  const sellTotal = Number(item.sellPrice || 0) * soldQty;
+  const profit = sellTotal - buyTotal;
+  const statusText = soldQty >= qty ? "已賣出" : (soldQty > 0 ? "部分賣出" : "持有中");
+  modalTitle.textContent = (icons[item.category] || "📦") + " " + item.name;
+  const imageBlock = item.image ? '<img class="detail-image" src="' + item.image + '" alt="' + escapeHtml(item.name) + '">' : "";
+  modalBody.innerHTML =
+    imageBlock +
+    '<div class="detail-row"><div class="detail-label">類別</div><div>' + item.category + "</div></div>" +
+    (item.category === "鞋子" ? '<div class="detail-row"><div class="detail-label">鞋碼 size</div><div>' + escapeHtml(item.size || "-") + "</div></div>" : "") +
+    '<div class="detail-row"><div class="detail-label">卡片顏色</div><div>' + getCardToneLabel(item.cardTone) + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">買入單價</div><div>' + formatMoney(item.buyPrice) + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">數量</div><div>' + qty + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">買入總額</div><div>' + formatMoney(buyTotal) + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">買入日期</div><div>' + (item.buyDate || "-") + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">購買通路</div><div>' + escapeHtml(item.source || "-") + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">備註</div><div>' + escapeHtml(item.note || "-") + "</div></div>" +
+    '<div class="detail-row"><div class="detail-label">目前狀態</div><div>' + statusText + "</div></div>" +
+    (soldQty > 0 ? '<div class="sell-info">' +
+      '<div class="detail-row"><div class="detail-label">已賣出數量</div><div>' + soldQty + "</div></div>" +
+      '<div class="detail-row"><div class="detail-label">剩餘數量</div><div>' + remainingQty + "</div></div>" +
+      '<div class="detail-row"><div class="detail-label">賣出單價</div><div>' + formatMoney(item.sellPrice) + "</div></div>" +
+      '<div class="detail-row"><div class="detail-label">賣出總額</div><div>' + formatMoney(sellTotal) + "</div></div>" +
+      '<div class="detail-row"><div class="detail-label">賣出日期</div><div>' + (item.sellDate || "-") + "</div></div>" +
+      '<div class="detail-row"><div class="detail-label">本筆損益</div><div class="' + (profit >= 0 ? "profit" : "loss") + '">' + formatMoney(profit) + "</div></div>" +
+      "</div>" : "");
+  markSoldBtn.style.display = remainingQty <= 0 ? "none" : "inline-block";
+  if (typeof modal.showModal === "function") modal.showModal();
+}
+
+function resetForm() {
+  nameInput.value = "";
+  categoryInput.value = "鞋子";
+  priceInput.value = "";
+  qtyInput.value = "1";
+  soldQtyInput.value = "0";
+  sizeInput.value = "";
+  updateSizeFieldVisibility();
+  cardToneInput.value = "normal";
+  dateInput.value = "";
+  sourceInput.value = "";
+  noteInput.value = "";
+  imageInput.value = "";
+  pendingImageData = "";
+}
+
+function setAddFormOpen(open) {
+  isAddFormOpen = open;
+  if (addFormSection) addFormSection.style.display = open ? "block" : "none";
+}
+
+function setOptionsPanelOpen(open) {
+  isOptionsPanelOpen = open;
+  const panel = document.getElementById("tradingOptionsPanel");
+  const toggleBtn = document.getElementById("tradingOptionsToggleBtn");
+  const backdrop = document.getElementById("tradingOptionsBackdrop");
+  if (panel) panel.hidden = !open;
+  if (toggleBtn) toggleBtn.classList.toggle("open", open);
+  if (backdrop) {
+    backdrop.hidden = true;
+    backdrop.setAttribute("aria-hidden", "true");
+  }
+  if (!open) {
+    setAccordionOpen("add", false);
+    setAccordionOpen("export", false);
+    setAccordionOpen("cloud", false);
+  }
+}
+
+function updateDetailBackdrop() {
+  const bd = document.getElementById("optionsDetailBackdrop");
+  if (!bd) return;
+  const addEl = document.getElementById("accBodyAdd");
+  const exEl = document.getElementById("accBodyExport");
+  const clEl = document.getElementById("accBodyCloud");
+  const any = Boolean(
+    (addEl && !addEl.hidden) ||
+    (exEl && !exEl.hidden) ||
+    (clEl && !clEl.hidden)
+  );
+  bd.hidden = !any;
+  bd.setAttribute("aria-hidden", any ? "false" : "true");
+}
+
+function setAccordionOpen(kind, open) {
+  const ids = { add: "accBodyAdd", export: "accBodyExport", cloud: "accBodyCloud" };
+  const body = document.getElementById(ids[kind]);
+  if (!body) return;
+  body.hidden = !open;
+  const optBtn = document.querySelector('.trading-opt-btn[data-opt="' + kind + '"]');
+  if (optBtn) {
+    optBtn.classList.toggle("active", open);
+    optBtn.setAttribute("aria-pressed", open ? "true" : "false");
+  }
+  if (kind === "add" && open) setAddFormOpen(true);
+  if (kind === "cloud" && open) pullCloudItems(false);
+  updateDetailBackdrop();
+}
+
+function closeAllOptionAccordions() {
+  setAccordionOpen("add", false);
+  setAccordionOpen("export", false);
+  setAccordionOpen("cloud", false);
+}
+
+function toggleAccordion(kind) {
+  const ids = { add: "accBodyAdd", export: "accBodyExport", cloud: "accBodyCloud" };
+  const body = document.getElementById(ids[kind]);
+  if (!body) return;
+  const isOpen = !body.hidden;
+  if (!isOpen) {
+    Object.keys(ids).forEach(function(k) {
+      if (k !== kind) setAccordionOpen(k, false);
+    });
+  }
+  setAccordionOpen(kind, !isOpen);
+}
+
+function updateSizeFieldVisibility() {
+  if (!sizeField) return;
+  const isShoe = categoryInput.value === "鞋子";
+  sizeField.style.display = isShoe ? "block" : "none";
+  if (!isShoe) sizeInput.value = "";
+}
+
+function scrollElementToViewportCenter(element) {
+  if (!element) return;
+  const rect = element.getBoundingClientRect();
+  const targetTop = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+  window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+}
+
+function beginEdit(id) {
+  const item = items.find(function(x) { return x.id === id; });
+  if (!item) return;
+  setOptionsPanelOpen(true);
+  setAccordionOpen("add", true);
+  setAddFormOpen(true);
+  editingId = id;
+  nameInput.value = item.name;
+  categoryInput.value = item.category;
+  priceInput.value = String(item.buyPrice);
+  qtyInput.value = String(item.qty || 1);
+  soldQtyInput.value = String(item.soldQty || 0);
+  sizeInput.value = item.size || "";
+  updateSizeFieldVisibility();
+  cardToneInput.value = item.cardTone || "normal";
+  dateInput.value = item.buyDate || "";
+  sourceInput.value = item.source || "";
+  noteInput.value = item.note || "";
+  imageInput.value = "";
+  pendingImageData = item.image || "";
+  addBtn.style.display = "none";
+  saveEditBtn.style.display = "inline-block";
+  cancelEditBtn.style.display = "inline-block";
+  if (modal.open) modal.close();
+  requestAnimationFrame(function() {
+    scrollElementToViewportCenter(addFormSection);
+  });
+}
+
+function endEdit() {
+  editingId = null;
+  addBtn.style.display = "inline-block";
+  saveEditBtn.style.display = "none";
+  cancelEditBtn.style.display = "none";
+  setAddFormOpen(false);
+  resetForm();
+}
+
+function collectFormData() {
+  const name = nameInput.value.trim();
+  const category = categoryInput.value;
+  const cardTone = cardToneInput.value;
+  const buyPrice = Number(priceInput.value);
+  const qty = Number(qtyInput.value);
+  const soldQty = Number(soldQtyInput.value || 0);
+  const size = category === "鞋子" ? sizeInput.value.trim() : "";
+  const buyDate = dateInput.value;
+  const source = sourceInput.value.trim();
+  const note = noteInput.value.trim();
+  if (!name) { alert("請輸入品項名稱"); return null; }
+  if (!Number.isFinite(buyPrice) || buyPrice <= 0) { alert("請輸入正確買入價格"); return null; }
+  if (!Number.isInteger(qty) || qty <= 0) { alert("請輸入正確數量"); return null; }
+  if (!Number.isInteger(soldQty) || soldQty < 0 || soldQty > qty) { alert("已賣出數量需介於 0 到總數量之間"); return null; }
+  return { name: name, category: category, cardTone: cardTone, buyPrice: buyPrice, qty: qty, soldQty: soldQty, size: size, buyDate: buyDate, source: source, note: note };
+}
+
+async function addItem() {
+  const data = collectFormData();
+  if (!data) return;
+  const newItem = {
+    id: createId(),
+    displayOrder: 1,
+    name: data.name,
+    category: data.category,
+    cardTone: data.cardTone,
+    size: data.size,
+    buyPrice: data.buyPrice,
+    qty: data.qty,
+    soldQty: data.soldQty,
+    buyDate: data.buyDate,
+    source: data.source,
+    note: data.note,
+    image: pendingImageData || "",
+    sold: data.soldQty >= data.qty,
+    sellPrice: null,
+    sellDate: null
+  };
+  items.unshift(newItem);
+  reindexItemOrder();
+  saveItems();
+  try {
+    await upsertItemToCloud(newItem);
+    if (isCloudReady()) setCloudStatus("新增已同步到雲端。");
+  } catch (error) {
+    setCloudStatus("新增成功，但雲端同步失敗：" + error.message, true);
+  }
+  resetForm();
+  setAddFormOpen(false);
+  setOptionsPanelOpen(false);
+  renderItems();
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  const idx = items.findIndex(function(x) { return x.id === editingId; });
+  if (idx < 0) return;
+  const data = collectFormData();
+  if (!data) return;
+  items[idx] = {
+    ...items[idx],
+    name: data.name,
+    category: data.category,
+    cardTone: data.cardTone,
+    size: data.size,
+    buyPrice: data.buyPrice,
+    qty: data.qty,
+    soldQty: data.soldQty,
+    sold: data.soldQty >= data.qty,
+    buyDate: data.buyDate,
+    source: data.source,
+    note: data.note,
+    image: pendingImageData || ""
+  };
+  if (data.soldQty === 0) {
+    items[idx].sellPrice = null;
+    items[idx].sellDate = null;
+  }
+  saveItems();
+  try {
+    await upsertItemToCloud(items[idx]);
+    if (isCloudReady()) setCloudStatus("編輯已同步到雲端。");
+  } catch (error) {
+    setCloudStatus("編輯成功，但雲端同步失敗：" + error.message, true);
+  }
+  endEdit();
+  setOptionsPanelOpen(false);
+  renderItems();
+}
+
+async function removeItem(id) {
+  const item = items.find(function(x) { return x.id === id; });
+  if (!item) return;
+  const ok = confirm("確定刪除「" + item.name + "」嗎？");
+  if (!ok) return;
+  items = items.filter(function(x) { return x.id !== id; });
+  reindexItemOrder();
+  saveItems();
+  try {
+    await deleteItemFromCloud(id);
+    if (isCloudReady()) setCloudStatus("刪除已同步到雲端。");
+  } catch (error) {
+    setCloudStatus("刪除成功，但雲端同步失敗：" + error.message, true);
+  }
+  renderItems();
+  if (modal.open) modal.close();
+  if (editingId === id) endEdit();
+}
+
+async function markSelectedAsSold() {
+  const idx = items.findIndex(function(x) { return x.id === selectedId; });
+  if (idx < 0) return;
+  const item = items[idx];
+  const totalQty = Number(item.qty || 1);
+  const soldQty = Math.min(totalQty, Math.max(0, Number(item.soldQty || 0)));
+  const remainingQty = totalQty - soldQty;
+  if (remainingQty <= 0) return alert("這筆品項已全部賣出");
+
+  const qtyText = prompt(
+    '「' + item.name + '」目前剩餘 ' + remainingQty + " 件，請輸入本次賣出數量（1-" + remainingQty + "）：",
+    "1"
+  );
+  if (qtyText === null) return;
+  const sellQty = Number(qtyText);
+  if (!Number.isInteger(sellQty) || sellQty <= 0 || sellQty > remainingQty) {
+    return alert("賣出數量格式錯誤");
+  }
+
+  let sellPrice = Number(item.sellPrice || 0);
+  let sellDate = item.sellDate || "";
+  if (soldQty === 0) {
+    const priceText = prompt('輸入「' + item.name + "」賣出單價：");
+    if (priceText === null) return;
+    sellPrice = Number(priceText);
+    if (!Number.isFinite(sellPrice) || sellPrice <= 0) return alert("賣出價格格式錯誤");
+    sellDate = prompt("輸入賣出日期（YYYY-MM-DD）：", new Date().toISOString().slice(0, 10));
+    if (sellDate === null) return;
+  } else if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+    const priceText = prompt('輸入「' + item.name + "」賣出單價：");
+    if (priceText === null) return;
+    sellPrice = Number(priceText);
+    if (!Number.isFinite(sellPrice) || sellPrice <= 0) return alert("賣出價格格式錯誤");
+  }
+
+  const nextSoldQty = soldQty + sellQty;
+  items[idx] = {
+    ...item,
+    soldQty: nextSoldQty,
+    sold: nextSoldQty >= totalQty,
+    sellPrice: sellPrice,
+    sellDate: sellDate || item.sellDate || new Date().toISOString().slice(0, 10)
+  };
+  saveItems();
+  try {
+    await upsertItemToCloud(items[idx]);
+    if (isCloudReady()) setCloudStatus("賣出狀態已同步到雲端。");
+  } catch (error) {
+    setCloudStatus("賣出狀態已更新，但雲端同步失敗：" + error.message, true);
+  }
+  renderItems();
+  openDetail(item.id);
+}
+
+function handleImageChange() {
+  const file = imageInput.files && imageInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    pendingImageData = String((event.target && event.target.result) || "");
+  };
+  reader.readAsDataURL(file);
+}
+
+function exportCsv() {
+  const header = ["名稱", "類別", "買入價格", "數量", "買入日期", "購買通路", "備註", "狀態", "賣出價格", "賣出日期", "損益"];
+  const rows = items.map(function(item) {
+    const soldQty = Number(item.soldQty || 0);
+    const totalQty = Number(item.qty || 1);
+    const status = soldQty >= totalQty ? "已賣出" : (soldQty > 0 ? "部分賣出" : "持有中");
+    const pnl = soldQty > 0 ? (Number(item.sellPrice || 0) - Number(item.buyPrice || 0)) * soldQty : "";
+    return [
+      item.name,
+      item.category,
+      item.buyPrice,
+      item.qty || 1,
+      item.buyDate || "",
+      item.source || "",
+      item.note || "",
+      status,
+      item.sellPrice == null ? "" : item.sellPrice,
+      item.sellDate || "",
+      pnl
+    ];
+  });
+  const csv = [header].concat(rows).map(function(row) {
+    return row.map(function(cell) {
+      const text = String(cell == null ? "" : cell).replace(/"/g, '""');
+      return '"' + text + '"';
+    }).join(",");
+  }).join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "collection-export.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function clearFilters() {
+  searchInput.value = "";
+  filterCategory.value = "全部";
+  filterStatus.value = "全部";
+  renderItems();
+}
+
+addBtn.addEventListener("click", addItem);
+categoryInput.addEventListener("change", updateSizeFieldVisibility);
+document.getElementById("tradingOptionsToggleBtn").addEventListener("click", function(event) {
+  event.stopPropagation();
+  setOptionsPanelOpen(!isOptionsPanelOpen);
+});
+const tradingOptionsBackdrop = document.getElementById("tradingOptionsBackdrop");
+if (tradingOptionsBackdrop) {
+  tradingOptionsBackdrop.addEventListener("click", function() {
+    setOptionsPanelOpen(false);
+  });
+}
+const optionsDetailBackdrop = document.getElementById("optionsDetailBackdrop");
+if (optionsDetailBackdrop) {
+  optionsDetailBackdrop.addEventListener("click", function() {
+    closeAllOptionAccordions();
+  });
+}
+document.querySelectorAll(".options-acc-body").forEach(function(el) {
+  el.addEventListener("click", function(event) {
+    event.stopPropagation();
+  });
+});
+document.querySelectorAll(".trading-opt-btn").forEach(function(btn) {
+  btn.addEventListener("click", function(event) {
+    event.stopPropagation();
+    const kind = btn.getAttribute("data-opt");
+    if (kind) toggleAccordion(kind);
+  });
+});
+saveEditBtn.addEventListener("click", saveEdit);
+cancelEditBtn.addEventListener("click", endEdit);
+markSoldBtn.addEventListener("click", markSelectedAsSold);
+editBtn.addEventListener("click", function() { if (selectedId) beginEdit(selectedId); });
+deleteBtn.addEventListener("click", function() { if (selectedId) removeItem(selectedId); });
+closeModalBtn.addEventListener("click", function() { modal.close(); });
+searchInput.addEventListener("input", renderItems);
+filterCategory.addEventListener("change", renderItems);
+filterStatus.addEventListener("change", renderItems);
+exportCsvBtn.addEventListener("click", exportCsv);
+clearFiltersBtn.addEventListener("click", clearFilters);
+saveCloudConfigBtn.addEventListener("click", saveCloudConfig);
+useLastCloudBtn.addEventListener("click", useLastCloudConfig);
+pullCloudBtn.addEventListener("click", function() { pullCloudItems(false); });
+pushCloudBtn.addEventListener("click", function() { pushAllToCloud(false); });
+safeSyncBtn.addEventListener("click", safeSyncCloud);
+imageInput.addEventListener("change", handleImageChange);
+modal.addEventListener("click", function(event) {
+  const rect = modal.getBoundingClientRect();
+  const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
+  if (!inside) modal.close();
+});
+
+cloudConfig = loadCloudConfig();
+cloudUrlInput.value = cloudConfig.url;
+cloudKeyInput.value = cloudConfig.key;
+cloudOwnerInput.value = cloudConfig.owner;
+setCloudStatus(isCloudReady() ? "已讀取雲端設定，可按「載入雲端」。" : "尚未設定雲端同步，先在上方填入資訊。");
+
+items = loadItems();
+saveItems();
+setAddFormOpen(false);
+setOptionsPanelOpen(false);
+updateSizeFieldVisibility();
+renderItems();
+if (isCloudReady()) {
+  pullCloudItems(true);
+}
+
+const AMAZON_STORAGE_KEY = "amazon_items";
+
+function normalizeAmazonRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map(function(item) {
+    const valid = ["ordered", "received", "reviewed", "refunded"];
+    const status = valid.indexOf(item.status) >= 0 ? item.status : "ordered";
+    let id = item.id;
+    if (id == null || id === "") id = Date.now();
+    const d = item.date ? new Date(item.date) : new Date();
+    const iso = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+    return {
+      id: id,
+      name: String(item.name || ""),
+      cost: Math.max(0, Number(item.cost || 0)),
+      refund: Math.max(0, Number(item.refund || 0)),
+      status: status,
+      date: iso,
+      link: String(item.link || "").trim()
+    };
+  });
+}
+
+let amazonItems = [];
+try {
+  amazonItems = normalizeAmazonRows(JSON.parse(localStorage.getItem(AMAZON_STORAGE_KEY) || "[]"));
+} catch (e) {
+  amazonItems = [];
+}
+
+function saveAmazon() {
+  localStorage.setItem(AMAZON_STORAGE_KEY, JSON.stringify(amazonItems));
+}
+
+function setAmzCloudStatus(message, isError) {
+  const el = document.getElementById("amzCloudStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? "#b91c1c" : "#475569";
+}
+
+async function upsertAmazonItemToCloud(item) {
+  if (!isCloudReady()) return;
+  await supabaseRequest(
+    "POST",
+    "amazon_items?on_conflict=owner_id,item_id",
+    [{ owner_id: cloudConfig.owner, item_id: String(item.id), item_json: item }],
+    { "Prefer": "resolution=merge-duplicates,return=minimal" }
+  );
+}
+
+async function deleteAmazonItemFromCloud(itemId) {
+  if (!isCloudReady()) return;
+  await supabaseRequest(
+    "DELETE",
+    "amazon_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&item_id=eq." + encodeURIComponent(String(itemId)),
+    undefined,
+    { "Prefer": "return=minimal" }
+  );
+}
+
+async function pullAmazonFromCloud(opts) {
+  opts = opts || {};
+  const isSilent = Boolean(opts.silent);
+  const throwOnError = Boolean(opts.throwOnError);
+  if (!isSilent) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    if (!isSilent) setAmzCloudStatus("請先在「設定」填寫 Supabase URL / Anon Key / 帳本代號。", true);
+    return;
+  }
+  try {
+    if (!isSilent) setAmzCloudStatus("載入 Amazon 雲端資料中...");
+    const rows = await supabaseRequest(
+      "GET",
+      "amazon_items?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&select=item_json",
+      undefined
+    );
+    const rawList = Array.isArray(rows) ? rows.map(function(r) { return r.item_json; }).filter(Boolean) : [];
+    amazonItems = normalizeAmazonRows(rawList);
+    saveAmazon();
+    rememberLastUsedCloudConfig();
+    renderAmazon();
+    if (!isSilent) setAmzCloudStatus("已載入 Amazon，共 " + amazonItems.length + " 筆。");
+  } catch (error) {
+    if (!isSilent) setAmzCloudStatus("Amazon 載入失敗：" + error.message, true);
+    if (throwOnError) throw error;
+  }
+}
+
+async function pushAllAmazonToCloud(isSilent) {
+  if (!isSilent) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    if (!isSilent) setAmzCloudStatus("請先在「設定」填寫雲端資料。", true);
+    return;
+  }
+  try {
+    if (!isSilent) setAmzCloudStatus("推送 Amazon 到雲端中...");
+    for (let i = 0; i < amazonItems.length; i++) {
+      await upsertAmazonItemToCloud(amazonItems[i]);
+    }
+    rememberLastUsedCloudConfig();
+    if (!isSilent) setAmzCloudStatus("Amazon 推送完成，共 " + amazonItems.length + " 筆。");
+  } catch (error) {
+    if (!isSilent) setAmzCloudStatus("Amazon 推送失敗：" + error.message, true);
+    throw error;
+  }
+}
+
+async function addAmazonItem() {
+  const nameInput = document.getElementById("amzName");
+  const costInput = document.getElementById("amzCost");
+  const linkInput = document.getElementById("amzLink");
+  const name = nameInput.value.trim();
+  const cost = Number(costInput.value);
+  const link = linkInput.value.trim();
+  if (!name || !Number.isFinite(cost) || cost <= 0) {
+    alert("請填寫商品名稱與正確成本");
+    return;
+  }
+  const newItem = {
+    id: Date.now(),
+    name: name,
+    cost: cost,
+    refund: 0,
+    status: "ordered",
+    date: new Date().toISOString(),
+    link: link
+  };
+  amazonItems.unshift(newItem);
+  saveAmazon();
+  nameInput.value = "";
+  costInput.value = "";
+  linkInput.value = "";
+  renderAmazon();
+  try {
+    await upsertAmazonItemToCloud(newItem);
+    if (isCloudReady()) setAmzCloudStatus("新增已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已存，但 Amazon 雲端同步失敗：" + error.message, true);
+  }
+}
+
+async function updateStatus(id) {
+  const item = amazonItems.find(function(i) { return i.id == id; });
+  if (!item) return;
+  if (item.status === "ordered") item.status = "received";
+  else if (item.status === "received") item.status = "reviewed";
+  else if (item.status === "reviewed") item.status = "refunded";
+  saveAmazon();
+  renderAmazon();
+  try {
+    await upsertAmazonItemToCloud(item);
+    if (isCloudReady()) setAmzCloudStatus("狀態已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+  }
+}
+
+async function setRefund(id) {
+  const amount = prompt("輸入退款金額：");
+  const item = amazonItems.find(function(i) { return i.id == id; });
+  if (!item) return;
+  if (amount == null || String(amount).trim() === "") return;
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n < 0) {
+    alert("請輸入正確金額");
+    return;
+  }
+  item.refund = n;
+  saveAmazon();
+  renderAmazon();
+  try {
+    await upsertAmazonItemToCloud(item);
+    if (isCloudReady()) setAmzCloudStatus("退款已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+  }
+}
+
+async function deleteAmazonItem(id) {
+  const item = amazonItems.find(function(i) { return i.id == id; });
+  if (!item) return;
+  if (!confirm("確定刪除「" + item.name + "」嗎？")) return;
+  const sid = String(id);
+  amazonItems = amazonItems.filter(function(i) { return String(i.id) !== sid; });
+  saveAmazon();
+  renderAmazon();
+  try {
+    await deleteAmazonItemFromCloud(sid);
+    if (isCloudReady()) setAmzCloudStatus("刪除已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已刪除，但 Amazon 雲端刪除失敗：" + error.message, true);
+  }
+}
+
+function getDaysPassed(date) {
+  const t = new Date(date).getTime();
+  if (isNaN(t)) return 0;
+  const diff = Date.now() - t;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function getStatusColor(status) {
+  if (status === "ordered") return "#ef4444";
+  if (status === "received") return "#f59e0b";
+  if (status === "reviewed") return "#3b82f6";
+  if (status === "refunded") return "#22c55e";
+  return "#64748b";
+}
+
+function safeAmazonHref(link) {
+  const s = String(link || "").trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  return "";
+}
+
+function renderAmazon() {
+  const list = document.getElementById("amzList");
+  const emptyAmz = document.getElementById("amzEmptyState");
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  let totalCost = 0;
+  let totalRefund = 0;
+  let completed = 0;
+  let cntArrived = 0;
+  let cntNotArrived = 0;
+  let cntReviewed = 0;
+  let cntNotReviewed = 0;
+  let cntHasRefund = 0;
+  let cntNoRefund = 0;
+  let cntDone = 0;
+
+  amazonItems.forEach(function(item) {
+    totalCost += item.cost;
+    totalRefund += item.refund;
+    if (item.status === "refunded") completed++;
+
+    if (item.status !== "ordered") cntArrived++;
+    if (item.status === "ordered") cntNotArrived++;
+    if (item.status === "reviewed" || item.status === "refunded") cntReviewed++;
+    if (item.status === "ordered" || item.status === "received") cntNotReviewed++;
+    if (Number(item.refund || 0) > 0) cntHasRefund++;
+    else cntNoRefund++;
+    if (item.status === "refunded") cntDone++;
+
+    const days = getDaysPassed(item.date);
+    let warning = "";
+    if (item.status !== "refunded" && days > 5) {
+      warning = "⚠️ 超過5天未完成";
+    }
+    if (item.status === "reviewed" && item.refund === 0) {
+      warning = "💸 還沒退款！";
+    }
+
+    const href = safeAmazonHref(item.link);
+    const linkBlock = href
+      ? '<a href="' + escapeHtml(href) + '" target="_blank" rel="noopener noreferrer">開啟商品連結</a>'
+      : '<span style="color:var(--muted);">（未填連結）</span>';
+
+    const warnHtml = warning ? '<div class="amz-warn">' + escapeHtml(warning) + "</div>" : "";
+
+    const card = document.createElement("article");
+    card.className = "item-card amz-card";
+    card.innerHTML =
+      '<div class="emoji">🛒</div>' +
+      '<div class="item-name">' + escapeHtml(item.name) + "</div>" +
+      '<div style="text-align:center;margin-bottom:8px;">' +
+      '<span class="tag" style="background:' +
+      getStatusColor(item.status) +
+      ';border-color:rgba(15,23,42,0.35);color:#fff;">' +
+      escapeHtml(item.status) +
+      "</span></div>" +
+      '<div class="meta">成本：' + formatMoney(item.cost) + "</div>" +
+      '<div class="meta">退款：' + formatMoney(item.refund) + "</div>" +
+      '<div class="meta">天數：' + days + " 天</div>" +
+      warnHtml +
+      '<div class="meta" style="text-align:center;">' + linkBlock + "</div>" +
+      '<div class="btn-row amz-card-actions" style="margin-top:10px;flex-wrap:wrap;justify-content:center;gap:8px;"></div>';
+
+    const row = card.querySelector(".amz-card-actions");
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "btn secondary";
+    nextBtn.textContent = "下一步";
+    nextBtn.addEventListener("click", function(event) {
+      event.stopPropagation();
+      updateStatus(item.id);
+    });
+    if (item.status === "refunded") nextBtn.disabled = true;
+
+    const refundBtn = document.createElement("button");
+    refundBtn.type = "button";
+    refundBtn.className = "btn primary";
+    refundBtn.textContent = "填退款";
+    refundBtn.addEventListener("click", function(event) {
+      event.stopPropagation();
+      setRefund(item.id);
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn warn";
+    delBtn.textContent = "刪除";
+    delBtn.addEventListener("click", function(event) {
+      event.stopPropagation();
+      deleteAmazonItem(item.id);
+    });
+
+    row.appendChild(nextBtn);
+    row.appendChild(refundBtn);
+    row.appendChild(delBtn);
+
+    list.appendChild(card);
+  });
+
+  if (emptyAmz) emptyAmz.hidden = amazonItems.length > 0;
+
+  const expenseEl = document.getElementById("amzExpense");
+  const refundEl = document.getElementById("amzRefund");
+  const profitEl = document.getElementById("amzProfit");
+  const rateEl = document.getElementById("amzRate");
+  if (expenseEl) expenseEl.textContent = formatMoney(totalCost);
+  if (refundEl) refundEl.textContent = formatMoney(totalRefund);
+  if (profitEl) {
+    const profit = totalRefund - totalCost;
+    profitEl.textContent = formatMoney(profit);
+    profitEl.className = "value " + (profit >= 0 ? "profit" : "loss");
+  }
+  if (rateEl) {
+    const rate = amazonItems.length ? Math.round((completed / amazonItems.length) * 100) : 0;
+    rateEl.textContent = rate + "%";
+  }
+
+  const totalN = amazonItems.length;
+  function setAmzCount(id, n) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(n);
+  }
+  setAmzCount("amzCntTotal", totalN);
+  setAmzCount("amzCntArrived", cntArrived);
+  setAmzCount("amzCntNotArrived", cntNotArrived);
+  setAmzCount("amzCntReviewed", cntReviewed);
+  setAmzCount("amzCntNotReviewed", cntNotReviewed);
+  setAmzCount("amzCntHasRefund", cntHasRefund);
+  setAmzCount("amzCntNoRefund", cntNoRefund);
+  setAmzCount("amzCntDone", cntDone);
+}
+
+const amzAddBtn = document.getElementById("amzAddBtn");
+if (amzAddBtn) amzAddBtn.addEventListener("click", addAmazonItem);
+const amzPullCloudBtn = document.getElementById("amzPullCloudBtn");
+const amzPushCloudBtn = document.getElementById("amzPushCloudBtn");
+if (amzPullCloudBtn) amzPullCloudBtn.addEventListener("click", function() { pullAmazonFromCloud({ silent: false }); });
+if (amzPushCloudBtn) amzPushCloudBtn.addEventListener("click", function() { pushAllAmazonToCloud(false); });
+
+function goPage(page) {
+  document.getElementById("homePage").style.display = "none";
+  document.getElementById("tradingPage").style.display = "none";
+  document.getElementById("amazonPage").style.display = "none";
+  document.getElementById("legoPage").style.display = "none";
+
+  if (page === "home") {
+    document.getElementById("homePage").style.display = "block";
+  }
+  if (page === "trading") {
+    document.getElementById("tradingPage").style.display = "block";
+  }
+  if (page === "amazon") {
+    document.getElementById("amazonPage").style.display = "block";
+    renderAmazon();
+  }
+  if (page === "lego") {
+    document.getElementById("legoPage").style.display = "block";
+  }
+}
+
+(async function() {
+  setAmzCloudStatus(
+    isCloudReady()
+      ? "已連線雲端；可載入／推送 Amazon（Supabase 需有 amazon_items 表）。"
+      : "請先在「收藏買賣」→ 設定填寫同一組 Supabase。",
+    false
+  );
+  if (isCloudReady()) {
+    await pullAmazonFromCloud({ silent: true });
+  }
+  renderAmazon();
+  goPage("home");
+})();
