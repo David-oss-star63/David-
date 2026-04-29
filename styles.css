@@ -426,12 +426,121 @@ textarea {
   cursor: pointer;
 }
 
+.item-card.amz-card .item-name {
+  margin-bottom: 10px;
+}
+
+.item-card.amz-card .meta {
+  margin: 6px 0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.item-card.amz-card .tag {
+  margin-top: 8px;
+}
+
 .item-card.amz-card .amz-warn {
   color: var(--red);
   font-weight: 700;
   text-align: center;
   margin: 6px 0 4px;
   font-size: 0.85rem;
+}
+
+.amz-product-image {
+  margin-bottom: 10px;
+}
+
+.amz-product-placeholder {
+  margin-bottom: 10px;
+}
+
+.amz-review-image {
+  height: 92px;
+  margin: 6px 0 8px;
+}
+
+.amz-review-text {
+  color: var(--text);
+}
+
+.amz-status-pill-wrap {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.amz-status-pill {
+  display: inline-block;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.amz-link-row {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.amz-card-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.amz-card-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.amz-card-nav .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.amz-card-refund-slot {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+  min-height: 0;
+}
+
+.amz-refund-btn {
+  width: 100%;
+  max-width: 220px;
+}
+
+.amz-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff1f2;
+  color: #be123c;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.amz-delete-btn:hover {
+  transform: translateY(-1px);
+  border-color: #fecdd3;
+}
+
+.amz-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .thumb {

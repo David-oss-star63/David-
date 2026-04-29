@@ -1034,23 +1034,123 @@ if (isCloudReady()) {
 
 const AMAZON_STORAGE_KEY = "amazon_items";
 
+/** Amazon 測評線性流程（0–7），按鈕文案會顯示鄰近階段名稱 */
+const AMZ_STATUS_LABELS = ["未到貨", "已到貨", "未評論", "已評論", "未上評", "已上評", "未退款", "已退款"];
+
+function getAmazonStatusStep(item) {
+  const n = item.statusStep;
+  if (Number.isInteger(n) && n >= 0 && n <= 7) return n;
+  const s = item.status;
+  if (s === "received") return 1;
+  if (s === "reviewed") return 5;
+  if (s === "refunded") return 7;
+  return 0;
+}
+
+function syncAmazonLegacyStatus(item) {
+  const step = getAmazonStatusStep(item);
+  item.statusStep = step;
+  if (step === 0) item.status = "ordered";
+  else if (step === 1) item.status = "received";
+  else if (step >= 2 && step <= 6) item.status = "reviewed";
+  else item.status = "refunded";
+}
+
+function getAmazonStepColor(step) {
+  const colors = ["#ef4444", "#f59e0b", "#eab308", "#84cc16", "#14b8a6", "#3b82f6", "#8b5cf6", "#22c55e"];
+  return colors[step] || "#64748b";
+}
+
+function normalizeReviewMode(mode) {
+  const raw = String(mode || "none");
+  if (raw === "text") return "text";
+  if (raw === "image_text") return "image_text";
+  return "none";
+}
+
+function getReviewModeLabel(mode) {
+  if (mode === "text") return "文字評";
+  if (mode === "image_text") return "圖文評";
+  return "免評";
+}
+
+function formatAmazonDisplayDate(value) {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "-";
+  return d.toISOString().slice(0, 10);
+}
+
+function getTodayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function summarizeReviewText(text) {
+  const content = String(text || "").trim();
+  if (!content) return "";
+  if (content.length <= 48) return content;
+  return content.slice(0, 48) + "...";
+}
+
+function readImageFileAsDataUrl(file) {
+  return new Promise(function(resolve, reject) {
+    if (!file) {
+      resolve("");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      resolve(String((event.target && event.target.result) || ""));
+    };
+    reader.onerror = function() {
+      reject(new Error("讀取圖片失敗"));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function normalizeAmazonRows(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.map(function(item) {
-    const valid = ["ordered", "received", "reviewed", "refunded"];
-    const status = valid.indexOf(item.status) >= 0 ? item.status : "ordered";
     let id = item.id;
     if (id == null || id === "") id = Date.now();
     const d = item.date ? new Date(item.date) : new Date();
     const iso = isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+
+    let statusStep = item.statusStep;
+    if (typeof statusStep !== "number" || !Number.isFinite(statusStep)) {
+      statusStep = NaN;
+    } else {
+      statusStep = Math.floor(statusStep);
+    }
+    if (!Number.isInteger(statusStep) || statusStep < 0 || statusStep > 7) {
+      const valid = ["ordered", "received", "reviewed", "refunded"];
+      const legacy = valid.indexOf(item.status) >= 0 ? item.status : "ordered";
+      if (legacy === "received") statusStep = 1;
+      else if (legacy === "reviewed") statusStep = 5;
+      else if (legacy === "refunded") statusStep = 7;
+      else statusStep = 0;
+    }
+
+    var legacyStatus;
+    if (statusStep === 0) legacyStatus = "ordered";
+    else if (statusStep === 1) legacyStatus = "received";
+    else if (statusStep >= 2 && statusStep <= 6) legacyStatus = "reviewed";
+    else legacyStatus = "refunded";
+
     return {
       id: id,
       name: String(item.name || ""),
+      orderId: String(item.orderId || "").trim(),
       cost: Math.max(0, Number(item.cost || 0)),
       refund: Math.max(0, Number(item.refund || 0)),
-      status: status,
+      status: legacyStatus,
+      statusStep: statusStep,
       date: iso,
-      link: String(item.link || "").trim()
+      link: String(item.link || "").trim(),
+      reviewMode: normalizeReviewMode(item.reviewMode),
+      reviewText: String(item.reviewText || ""),
+      reviewImage: String(item.reviewImage || ""),
+      productImage: String(item.productImage || "")
     };
   });
 }
@@ -1142,29 +1242,55 @@ async function pushAllAmazonToCloud(isSilent) {
 
 async function addAmazonItem() {
   const nameInput = document.getElementById("amzName");
+  const orderIdInput = document.getElementById("amzOrderId");
   const costInput = document.getElementById("amzCost");
+  const orderDateInput = document.getElementById("amzOrderDate");
   const linkInput = document.getElementById("amzLink");
+  const reviewModeInput = document.getElementById("amzReviewMode");
+  const productImageInput = document.getElementById("amzProductImage");
   const name = nameInput.value.trim();
+  const orderId = orderIdInput.value.trim();
   const cost = Number(costInput.value);
+  const orderDateValue = String(orderDateInput.value || "").trim();
+  const orderDate = orderDateValue || getTodayIsoDate();
   const link = linkInput.value.trim();
-  if (!name || !Number.isFinite(cost) || cost <= 0) {
-    alert("請填寫商品名稱與正確成本");
+  const reviewMode = normalizeReviewMode(reviewModeInput.value);
+  if (!name || !orderId || !orderDate || !Number.isFinite(cost) || cost <= 0) {
+    alert("請填寫商品名稱、訂單編號、下訂日期與正確成本");
+    return;
+  }
+  const productImageFile = productImageInput.files && productImageInput.files[0];
+  let productImage = "";
+  try {
+    productImage = await readImageFileAsDataUrl(productImageFile);
+  } catch (error) {
+    alert(error.message || "圖片讀取失敗");
     return;
   }
   const newItem = {
     id: Date.now(),
     name: name,
+    orderId: orderId,
     cost: cost,
     refund: 0,
     status: "ordered",
-    date: new Date().toISOString(),
-    link: link
+    statusStep: 0,
+    date: new Date(orderDate + "T00:00:00").toISOString(),
+    link: link,
+    reviewMode: reviewMode,
+    reviewText: "",
+    reviewImage: "",
+    productImage: productImage
   };
   amazonItems.unshift(newItem);
   saveAmazon();
   nameInput.value = "";
+  orderIdInput.value = "";
   costInput.value = "";
+  orderDateInput.value = getTodayIsoDate();
   linkInput.value = "";
+  reviewModeInput.value = "none";
+  productImageInput.value = "";
   renderAmazon();
   try {
     await upsertAmazonItemToCloud(newItem);
@@ -1174,12 +1300,30 @@ async function addAmazonItem() {
   }
 }
 
-async function updateStatus(id) {
+async function advanceAmazonStep(id) {
   const item = amazonItems.find(function(i) { return i.id == id; });
   if (!item) return;
-  if (item.status === "ordered") item.status = "received";
-  else if (item.status === "received") item.status = "reviewed";
-  else if (item.status === "reviewed") item.status = "refunded";
+  const step = getAmazonStatusStep(item);
+  if (step >= 7) return;
+  item.statusStep = step + 1;
+  syncAmazonLegacyStatus(item);
+  saveAmazon();
+  renderAmazon();
+  try {
+    await upsertAmazonItemToCloud(item);
+    if (isCloudReady()) setAmzCloudStatus("狀態已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+  }
+}
+
+async function rewindAmazonStep(id) {
+  const item = amazonItems.find(function(i) { return i.id == id; });
+  if (!item) return;
+  const step = getAmazonStatusStep(item);
+  if (step <= 0) return;
+  item.statusStep = step - 1;
+  syncAmazonLegacyStatus(item);
   saveAmazon();
   renderAmazon();
   try {
@@ -1234,14 +1378,6 @@ function getDaysPassed(date) {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-function getStatusColor(status) {
-  if (status === "ordered") return "#ef4444";
-  if (status === "received") return "#f59e0b";
-  if (status === "reviewed") return "#3b82f6";
-  if (status === "refunded") return "#22c55e";
-  return "#64748b";
-}
-
 function safeAmazonHref(link) {
   const s = String(link || "").trim();
   if (/^https?:\/\//i.test(s)) return s;
@@ -1267,24 +1403,26 @@ function renderAmazon() {
   let cntDone = 0;
 
   amazonItems.forEach(function(item) {
+    const step = getAmazonStatusStep(item);
     totalCost += item.cost;
     totalRefund += item.refund;
-    if (item.status === "refunded") completed++;
+    if (step === 7) completed++;
 
-    if (item.status !== "ordered") cntArrived++;
-    if (item.status === "ordered") cntNotArrived++;
-    if (item.status === "reviewed" || item.status === "refunded") cntReviewed++;
-    if (item.status === "ordered" || item.status === "received") cntNotReviewed++;
+    if (step >= 1) cntArrived++;
+    if (step === 0) cntNotArrived++;
+    if (step >= 5) cntReviewed++;
+    if (step < 5) cntNotReviewed++;
     if (Number(item.refund || 0) > 0) cntHasRefund++;
     else cntNoRefund++;
-    if (item.status === "refunded") cntDone++;
+    if (step === 7) cntDone++;
 
+    const reviewMode = normalizeReviewMode(item.reviewMode);
     const days = getDaysPassed(item.date);
     let warning = "";
-    if (item.status !== "refunded" && days > 5) {
+    if (step < 7 && days > 5) {
       warning = "⚠️ 超過5天未完成";
     }
-    if (item.status === "reviewed" && item.refund === 0) {
+    if (step === 6 && item.refund === 0) {
       warning = "💸 還沒退款！";
     }
 
@@ -1294,57 +1432,92 @@ function renderAmazon() {
       : '<span style="color:var(--muted);">（未填連結）</span>';
 
     const warnHtml = warning ? '<div class="amz-warn">' + escapeHtml(warning) + "</div>" : "";
+    const displayDate = formatAmazonDisplayDate(item.date);
+    const orderId = String(item.orderId || "").trim() || "-";
+    const productImageBlock = item.productImage
+      ? '<img class="thumb amz-product-image" src="' + item.productImage + '" alt="' + escapeHtml(item.name) + '">'
+      : '<div class="emoji amz-product-placeholder">🛒</div>';
+
+    const statusLabel = AMZ_STATUS_LABELS[step];
+    const statusColor = getAmazonStepColor(step);
 
     const card = document.createElement("article");
     card.className = "item-card amz-card";
     card.innerHTML =
-      '<div class="emoji">🛒</div>' +
       '<div class="item-name">' + escapeHtml(item.name) + "</div>" +
-      '<div style="text-align:center;margin-bottom:8px;">' +
-      '<span class="tag" style="background:' +
-      getStatusColor(item.status) +
-      ';border-color:rgba(15,23,42,0.35);color:#fff;">' +
-      escapeHtml(item.status) +
+      productImageBlock +
+      '<div class="amz-status-pill-wrap">' +
+      '<span class="tag amz-status-pill" style="background:' +
+      statusColor +
+      ';border-color:rgba(15,23,42,0.2);color:#fff;">' +
+      escapeHtml(statusLabel) +
       "</span></div>" +
-      '<div class="meta">成本：' + formatMoney(item.cost) + "</div>" +
+      '<div class="meta"><strong>訂單編號：</strong>' + escapeHtml(orderId) + "</div>" +
+      '<div class="meta"><strong>金額：</strong>' + formatMoney(item.cost) + "</div>" +
+      '<div class="meta"><strong>日期：</strong>' + displayDate + "</div>" +
+      '<div class="meta"><strong>評論：</strong>' + getReviewModeLabel(reviewMode) + "</div>" +
       '<div class="meta">退款：' + formatMoney(item.refund) + "</div>" +
       '<div class="meta">天數：' + days + " 天</div>" +
       warnHtml +
-      '<div class="meta" style="text-align:center;">' + linkBlock + "</div>" +
-      '<div class="btn-row amz-card-actions" style="margin-top:10px;flex-wrap:wrap;justify-content:center;gap:8px;"></div>';
+      '<div class="meta amz-link-row">' + linkBlock + "</div>" +
+      '<div class="amz-card-footer">' +
+      '<div class="amz-card-nav">' +
+      '<button type="button" class="btn secondary amz-nav-prev"></button>' +
+      '<button type="button" class="btn secondary amz-nav-next"></button>' +
+      "</div>" +
+      '<div class="amz-card-refund-slot"></div>' +
+      '<button type="button" class="amz-delete-btn" aria-label="刪除">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+      '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>' +
+      "</svg></button>" +
+      "</div>";
 
-    const row = card.querySelector(".amz-card-actions");
-    const nextBtn = document.createElement("button");
-    nextBtn.type = "button";
-    nextBtn.className = "btn secondary";
-    nextBtn.textContent = "下一步";
+    const prevBtn = card.querySelector(".amz-nav-prev");
+    const nextBtn = card.querySelector(".amz-nav-next");
+    const refundSlot = card.querySelector(".amz-card-refund-slot");
+    const delBtn = card.querySelector(".amz-delete-btn");
+
+    if (step > 0) {
+      prevBtn.textContent = "\u2190 " + AMZ_STATUS_LABELS[step - 1];
+    } else {
+      prevBtn.textContent = "\u2014";
+    }
+    prevBtn.disabled = step <= 0;
+    prevBtn.title = step > 0 ? "回到「" + AMZ_STATUS_LABELS[step - 1] + "」" : "";
+
+    if (step < 7) {
+      nextBtn.textContent = AMZ_STATUS_LABELS[step + 1] + " \u2192";
+    } else {
+      nextBtn.textContent = AMZ_STATUS_LABELS[7];
+    }
+    nextBtn.disabled = step >= 7;
+    nextBtn.title = step < 7 ? "前往「" + AMZ_STATUS_LABELS[step + 1] + "」" : "目前為最後階段「已退款」";
+
+    prevBtn.addEventListener("click", function(event) {
+      event.stopPropagation();
+      rewindAmazonStep(item.id);
+    });
     nextBtn.addEventListener("click", function(event) {
       event.stopPropagation();
-      updateStatus(item.id);
-    });
-    if (item.status === "refunded") nextBtn.disabled = true;
-
-    const refundBtn = document.createElement("button");
-    refundBtn.type = "button";
-    refundBtn.className = "btn primary";
-    refundBtn.textContent = "填退款";
-    refundBtn.addEventListener("click", function(event) {
-      event.stopPropagation();
-      setRefund(item.id);
+      advanceAmazonStep(item.id);
     });
 
-    const delBtn = document.createElement("button");
-    delBtn.type = "button";
-    delBtn.className = "btn warn";
-    delBtn.textContent = "刪除";
+    if (step === 7) {
+      const refundBtn = document.createElement("button");
+      refundBtn.type = "button";
+      refundBtn.className = "btn primary amz-refund-btn";
+      refundBtn.textContent = "填退款";
+      refundBtn.addEventListener("click", function(event) {
+        event.stopPropagation();
+        setRefund(item.id);
+      });
+      refundSlot.appendChild(refundBtn);
+    }
+
     delBtn.addEventListener("click", function(event) {
       event.stopPropagation();
       deleteAmazonItem(item.id);
     });
-
-    row.appendChild(nextBtn);
-    row.appendChild(refundBtn);
-    row.appendChild(delBtn);
 
     list.appendChild(card);
   });
@@ -1384,6 +1557,8 @@ function renderAmazon() {
 
 const amzAddBtn = document.getElementById("amzAddBtn");
 if (amzAddBtn) amzAddBtn.addEventListener("click", addAmazonItem);
+const amzOrderDateInput = document.getElementById("amzOrderDate");
+if (amzOrderDateInput && !amzOrderDateInput.value) amzOrderDateInput.value = getTodayIsoDate();
 const amzPullCloudBtn = document.getElementById("amzPullCloudBtn");
 const amzPushCloudBtn = document.getElementById("amzPushCloudBtn");
 if (amzPullCloudBtn) amzPullCloudBtn.addEventListener("click", function() { pullAmazonFromCloud({ silent: false }); });

@@ -208,8 +208,18 @@
         <div class="label" style="margin-bottom: 10px;">新增訂單</div>
         <div class="form-grid">
           <div class="field"><label for="amzName">商品名稱</label><input id="amzName" type="text" placeholder="例如 藍牙耳機"></div>
+          <div class="field"><label for="amzOrderId">訂單編號</label><input id="amzOrderId" type="text" placeholder="例如 112-1234567-1234567"></div>
           <div class="field"><label for="amzCost">成本（支出）</label><input id="amzCost" type="number" min="0" step="1" placeholder="例如 100"></div>
+          <div class="field"><label for="amzOrderDate">下訂日期</label><input id="amzOrderDate" type="date"></div>
+          <div class="field"><label for="amzReviewMode">評論模式</label>
+            <select id="amzReviewMode">
+              <option value="none">免評</option>
+              <option value="text">文字評</option>
+              <option value="image_text">圖文評</option>
+            </select>
+          </div>
           <div class="field wide"><label for="amzLink">商品連結（選填）</label><input id="amzLink" type="url" placeholder="https://www.amazon.com/dp/..."></div>
+          <div class="field wide"><label for="amzProductImage">商品圖片（選填）</label><input id="amzProductImage" type="file" accept="image/*"></div>
         </div>
         <div class="btn-row" style="margin-top: 10px;">
           <button id="amzAddBtn" type="button" class="btn primary">新增訂單</button>
