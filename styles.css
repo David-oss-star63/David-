@@ -154,6 +154,52 @@ h1 {
   flex: 1 1 118px;
 }
 
+#amazonPage .amz-sub-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+}
+
+#amazonPage .amz-sub-stats .profit-stat {
+  margin-left: 0;
+}
+
+button.stat.amz-filter-stat {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+button.stat.amz-filter-stat:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+}
+
+.amz-filter-stat.amz-filter-active {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.28);
+}
+
+@media (max-width: 820px) {
+  #amazonPage .amz-sub-stats {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    padding-bottom: 4px;
+    margin-right: -6px;
+    padding-right: 6px;
+  }
+
+  #amazonPage .amz-sub-stats .stat.amz-filter-stat {
+    flex: 0 0 auto;
+    min-width: 112px;
+  }
+}
+
 .stat {
   background: var(--card);
   border: 1px solid var(--border);

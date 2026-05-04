@@ -168,44 +168,56 @@
   </dialog>
   </div>
 
-  <div id="amazonPage" style="display:none;">
-    <div class="container subpage-shell">
-      <button type="button" class="btn secondary nav-back" onclick="goPage('home')">返回首頁</button>
-      <header class="page-heading">
-        <h1 class="page-title">Amazon測評</h1>
-        <p class="page-subtitle">追蹤訂單流程、成本／退款、天數提醒與完成率。</p>
-      </header>
-
-      <div class="panel top-panel" style="margin-bottom: 14px;">
-        <div class="stat"><div class="label">總支出</div><div id="amzExpense" class="value">$0</div></div>
-        <div class="stat"><div class="label">總退款</div><div id="amzRefund" class="value">$0</div></div>
-        <div class="stat profit-stat"><div class="label">利潤</div><div id="amzProfit" class="value">$0</div></div>
-        <div class="stat"><div class="label">完成率</div><div id="amzRate" class="value">0%</div></div>
-      </div>
-
-      <div class="panel top-panel amz-sub-stats" style="margin-bottom: 14px;">
-        <div class="stat"><div class="label">總訂單數</div><div id="amzCntTotal" class="value">0</div></div>
-        <div class="stat"><div class="label">已到貨</div><div id="amzCntArrived" class="value">0</div></div>
-        <div class="stat"><div class="label">未到貨</div><div id="amzCntNotArrived" class="value">0</div></div>
-        <div class="stat"><div class="label">已上評</div><div id="amzCntReviewed" class="value">0</div></div>
-        <div class="stat"><div class="label">未上評</div><div id="amzCntNotReviewed" class="value">0</div></div>
-        <div class="stat"><div class="label">已退款</div><div id="amzCntHasRefund" class="value">0</div></div>
-        <div class="stat"><div class="label">未退款</div><div id="amzCntNoRefund" class="value">0</div></div>
-        <div class="stat profit-stat"><div class="label">已完成</div><div id="amzCntDone" class="value">0</div></div>
-      </div>
-
-      <div class="panel" style="margin-bottom: 14px;">
-        <div class="label" style="margin-bottom: 8px;">Amazon 雲端同步</div>
-        <p style="margin: 0 0 10px; font-size: 0.88rem; color: var(--muted);">與「收藏買賣」共用同一組 Supabase（URL / Anon Key / 帳本代號），資料表名稱為 <code>amazon_items</code>。</p>
-        <div class="btn-row" style="flex-wrap: wrap;">
-          <button type="button" id="amzPullCloudBtn" class="btn secondary">載入 Amazon 雲端</button>
-          <button type="button" id="amzPushCloudBtn" class="btn primary">推送 Amazon 雲端</button>
+  <div id="amazonPage" class="trading-page-wrap" style="display:none;">
+    <div class="trading-layout">
+      <aside class="trading-sidebar" aria-label="Amazon測評選單">
+        <div class="trading-top-actions">
+          <button type="button" class="btn secondary trading-back-btn trading-nav-equal" onclick="goPage('home')">返回首頁</button>
+          <div class="trading-options-wrap">
+            <div class="trading-options-btn-col">
+              <button type="button" id="amzOptionsToggleBtn" class="btn primary trading-nav-equal">選項</button>
+              <div id="amzOptionsPanel" class="trading-options-panel" hidden>
+                <div class="trading-options-quick-btns">
+                  <button type="button" class="btn primary trading-nav-equal amz-opt-btn" data-amz-opt="add" aria-pressed="false">新增訂單</button>
+                  <button type="button" class="btn primary trading-nav-equal amz-opt-btn" data-amz-opt="cloud" aria-pressed="false">雲端同步</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div id="amzCloudStatus" style="margin-top: 8px; font-size: 0.88rem; color: #475569;"></div>
-      </div>
+      </aside>
 
-      <div class="panel">
-        <div class="label" style="margin-bottom: 10px;">新增訂單</div>
+      <div class="trading-main-area">
+        <div class="container trading-main-inner">
+          <h1 style="margin: 0 0 14px;">Amazon測評</h1>
+          <div class="panel top-panel" style="margin-bottom: 14px;">
+            <div class="stat"><div class="label">總支出</div><div id="amzExpense" class="value">$0</div></div>
+            <div class="stat"><div class="label">總退款</div><div id="amzRefund" class="value">$0</div></div>
+            <div class="stat profit-stat"><div class="label">利潤</div><div id="amzProfit" class="value">$0</div></div>
+            <div class="stat"><div class="label">完成率</div><div id="amzRate" class="value">0%</div></div>
+          </div>
+
+          <div class="panel top-panel amz-sub-stats" style="margin-bottom: 14px;" role="toolbar" aria-label="訂單狀態篩選">
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="all" aria-pressed="false"><div class="label">總訂單數</div><div id="amzCntTotal" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s0" aria-pressed="false"><div class="label">未到貨</div><div id="amzCntNotArrived" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s1" aria-pressed="false"><div class="label">已到貨</div><div id="amzCntArrived" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s2" aria-pressed="false"><div class="label">未評論</div><div id="amzCntStepNoComment" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s3" aria-pressed="false"><div class="label">已評論</div><div id="amzCntStepCommented" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s4" aria-pressed="false"><div class="label">未上評</div><div id="amzCntStepNotPosted" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s5" aria-pressed="false"><div class="label">已上評</div><div id="amzCntStepPosted" class="value">0</div></button>
+            <button type="button" class="stat amz-filter-stat" data-amz-filter="s6hr" aria-pressed="false"><div class="label">已退款</div><div id="amzCntRefundRecorded" class="value">0</div></button>
+            <button type="button" class="stat profit-stat amz-filter-stat" data-amz-filter="s7" aria-pressed="false"><div class="label">已完成</div><div id="amzCntDone" class="value">0</div></button>
+          </div>
+
+          <div id="amzList" class="grid" style="margin-top: 14px;"></div>
+          <div id="amzEmptyState" class="empty" hidden>目前沒有 Amazon 測評訂單，請用上方「新增訂單」加入。</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="amzAccBodyAdd" class="options-acc-body options-acc-overlay" hidden>
+      <div class="panel options-inner-panel">
+        <div class="label" style="margin:0 0 10px;">新增訂單</div>
         <div class="form-grid">
           <div class="field"><label for="amzName">商品名稱</label><input id="amzName" type="text" placeholder="例如 藍牙耳機"></div>
           <div class="field"><label for="amzOrderId">訂單編號</label><input id="amzOrderId" type="text" placeholder="例如 112-1234567-1234567"></div>
@@ -216,8 +228,12 @@
               <option value="none">免評</option>
               <option value="text">文字評</option>
               <option value="image_text">圖文評</option>
+              <option value="video">視頻</option>
+              <option value="image_text_video">圖文+視頻</option>
             </select>
           </div>
+          <div class="field wide" id="amzReviewImageField" hidden><label for="amzReviewImage">評論圖片（選填）</label><input id="amzReviewImage" type="file" accept="image/*"></div>
+          <div class="field wide" id="amzReviewVideoField" hidden><label for="amzReviewVideo">評論影片（選填）</label><input id="amzReviewVideo" type="file" accept="video/*"></div>
           <div class="field wide"><label for="amzLink">商品連結（選填）</label><input id="amzLink" type="url" placeholder="https://www.amazon.com/dp/..."></div>
           <div class="field wide"><label for="amzProductImage">商品圖片（選填）</label><input id="amzProductImage" type="file" accept="image/*"></div>
         </div>
@@ -225,10 +241,20 @@
           <button id="amzAddBtn" type="button" class="btn primary">新增訂單</button>
         </div>
       </div>
-
-      <div id="amzList" class="grid" style="margin-top: 14px;"></div>
-      <div id="amzEmptyState" class="empty" hidden>目前沒有 Amazon 測評訂單，請用上方「新增訂單」加入。</div>
     </div>
+
+    <div id="amzAccBodyCloud" class="options-acc-body options-acc-overlay" hidden>
+      <div class="panel options-inner-panel">
+        <div class="label" style="margin:0 0 8px;">Amazon 雲端同步</div>
+        <p style="margin: 0 0 10px; font-size: 0.88rem; color: var(--muted);">與「收藏買賣」共用同一組 Supabase（URL / Anon Key / 帳本代號），資料表名稱為 <code>amazon_items</code>。</p>
+        <div class="btn-row" style="flex-wrap: wrap;">
+          <button type="button" id="amzPullCloudBtn" class="btn secondary">載入 Amazon 雲端</button>
+          <button type="button" id="amzPushCloudBtn" class="btn primary">推送 Amazon 雲端</button>
+        </div>
+        <div id="amzCloudStatus" class="cloud-status"></div>
+      </div>
+    </div>
+    <button type="button" id="amzOptionsDetailBackdrop" class="options-detail-backdrop" hidden aria-hidden="true" tabindex="-1"></button>
   </div>
 
   <div id="legoPage" style="display:none;">
