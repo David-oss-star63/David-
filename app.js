@@ -652,6 +652,7 @@ function updateDetailBackdrop() {
   const clEl = document.getElementById("accBodyCloud");
   const amzAddEl = document.getElementById("amzAccBodyAdd");
   const amzCloudEl = document.getElementById("amzAccBodyCloud");
+  const amzEditEl = document.getElementById("amzAccBodyEdit");
   const tradingAny = Boolean(
     (addEl && !addEl.hidden) ||
     (exEl && !exEl.hidden) ||
@@ -659,7 +660,8 @@ function updateDetailBackdrop() {
   );
   const amzAny = Boolean(
     (amzAddEl && !amzAddEl.hidden) ||
-    (amzCloudEl && !amzCloudEl.hidden)
+    (amzCloudEl && !amzCloudEl.hidden) ||
+    (amzEditEl && !amzEditEl.hidden)
   );
   if (tradingBd) {
     tradingBd.hidden = !tradingAny;
@@ -692,6 +694,9 @@ function closeAllOptionAccordions() {
   setAccordionOpen("cloud", false);
   setAmzAccordionOpen("add", false);
   setAmzAccordionOpen("cloud", false);
+  const amzEditEl = document.getElementById("amzAccBodyEdit");
+  if (amzEditEl) amzEditEl.hidden = true;
+  updateDetailBackdrop();
 }
 
 function toggleAccordion(kind) {
@@ -720,6 +725,10 @@ function setAmzOptionsPanelOpen(open) {
 }
 
 function setAmzAccordionOpen(kind, open) {
+  if (open) {
+    const editEl = document.getElementById("amzAccBodyEdit");
+    if (editEl) editEl.hidden = true;
+  }
   const ids = { add: "amzAccBodyAdd", cloud: "amzAccBodyCloud" };
   const body = document.getElementById(ids[kind]);
   if (!body) return;
@@ -1381,6 +1390,161 @@ function updateAmzReviewMediaFields() {
   }
 }
 
+function initAmzEditStatusStepSelect() {
+  const sel = document.getElementById("amzEditStatusStep");
+  if (!sel || sel.getAttribute("data-inited") === "1") return;
+  sel.setAttribute("data-inited", "1");
+  sel.innerHTML = "";
+  for (let i = 0; i < AMZ_STATUS_LABELS.length; i++) {
+    const o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = AMZ_STATUS_LABELS[i];
+    sel.appendChild(o);
+  }
+}
+
+function updateAmzEditReviewMediaFields() {
+  const modeEl = document.getElementById("amzEditReviewMode");
+  const imgWrap = document.getElementById("amzEditReviewImageField");
+  const vidWrap = document.getElementById("amzEditReviewVideoField");
+  if (!modeEl || !imgWrap || !vidWrap) return;
+  const mode = normalizeReviewMode(modeEl.value);
+  const showImg = mode === "image_text" || mode === "image_text_video";
+  const showVid = mode === "video" || mode === "image_text_video";
+  imgWrap.hidden = !showImg;
+  vidWrap.hidden = !showVid;
+  imgWrap.style.display = showImg ? "flex" : "none";
+  vidWrap.style.display = showVid ? "flex" : "none";
+  if (!showImg) {
+    const imgIn = document.getElementById("amzEditReviewImage");
+    if (imgIn) imgIn.value = "";
+  }
+  if (!showVid) {
+    const vidIn = document.getElementById("amzEditReviewVideo");
+    if (vidIn) vidIn.value = "";
+  }
+}
+
+function closeAmazonEdit() {
+  const wrap = document.getElementById("amzAccBodyEdit");
+  if (wrap) wrap.hidden = true;
+  ["amzEditProductImage", "amzEditReviewImage", "amzEditReviewVideo"].forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  updateDetailBackdrop();
+}
+
+function openAmazonEdit(itemId) {
+  initAmzEditStatusStepSelect();
+  const item = amazonItems.find(function(i) { return String(i.id) === String(itemId); });
+  if (!item) return;
+  setAmzOptionsPanelOpen(false);
+  setAmzAccordionOpen("add", false);
+  setAmzAccordionOpen("cloud", false);
+
+  const idEl = document.getElementById("amzEditItemId");
+  const nameEl = document.getElementById("amzEditName");
+  const orderIdEl = document.getElementById("amzEditOrderId");
+  const costEl = document.getElementById("amzEditCost");
+  const dateEl = document.getElementById("amzEditOrderDate");
+  const linkEl = document.getElementById("amzEditLink");
+  const modeEl = document.getElementById("amzEditReviewMode");
+  const textEl = document.getElementById("amzEditReviewText");
+  const stepEl = document.getElementById("amzEditStatusStep");
+  const refundEl = document.getElementById("amzEditRefund");
+  if (!idEl || !nameEl || !orderIdEl || !costEl || !dateEl || !linkEl || !modeEl || !textEl || !stepEl || !refundEl) return;
+
+  idEl.value = String(item.id);
+  nameEl.value = item.name || "";
+  orderIdEl.value = item.orderId || "";
+  costEl.value = String(item.cost != null ? item.cost : "");
+  dateEl.value = formatAmazonDisplayDate(item.date);
+  linkEl.value = item.link || "";
+  modeEl.value = normalizeReviewMode(item.reviewMode);
+  textEl.value = item.reviewText || "";
+  stepEl.value = String(getAmazonStatusStep(item));
+  refundEl.value = String(item.refund != null ? item.refund : 0);
+
+  ["amzEditProductImage", "amzEditReviewImage", "amzEditReviewVideo"].forEach(function(fid) {
+    const el = document.getElementById(fid);
+    if (el) el.value = "";
+  });
+  updateAmzEditReviewMediaFields();
+
+  const wrap = document.getElementById("amzAccBodyEdit");
+  if (wrap) wrap.hidden = false;
+  updateDetailBackdrop();
+}
+
+async function saveAmazonEdit() {
+  const idEl = document.getElementById("amzEditItemId");
+  const rawId = idEl && idEl.value;
+  const item = amazonItems.find(function(i) { return String(i.id) === String(rawId); });
+  if (!item) return;
+
+  const name = document.getElementById("amzEditName").value.trim();
+  const orderId = document.getElementById("amzEditOrderId").value.trim();
+  const cost = Number(document.getElementById("amzEditCost").value);
+  const orderDateValue = String(document.getElementById("amzEditOrderDate").value || "").trim();
+  const orderDate = orderDateValue || getTodayIsoDate();
+  const link = document.getElementById("amzEditLink").value.trim();
+  const reviewMode = normalizeReviewMode(document.getElementById("amzEditReviewMode").value);
+  const reviewText = document.getElementById("amzEditReviewText").value;
+  const stepRaw = Number(document.getElementById("amzEditStatusStep").value);
+  const refund = Number(document.getElementById("amzEditRefund").value);
+
+  if (!name || !orderId || !orderDate || !Number.isFinite(cost) || cost <= 0) {
+    alert("請填寫商品名稱、訂單編號、下訂日期與正確成本");
+    return;
+  }
+  if (!Number.isInteger(stepRaw) || stepRaw < 0 || stepRaw > 7) {
+    alert("請選擇有效的流程狀態");
+    return;
+  }
+  if (!Number.isFinite(refund) || refund < 0) {
+    alert("退款金額需為 0 以上的數字");
+    return;
+  }
+
+  const productImageInput = document.getElementById("amzEditProductImage");
+  const reviewImageInput = document.getElementById("amzEditReviewImage");
+  const reviewVideoInput = document.getElementById("amzEditReviewVideo");
+  const productFile = productImageInput && productImageInput.files && productImageInput.files[0];
+  const reviewImageFile = reviewImageInput && reviewImageInput.files && reviewImageInput.files[0];
+  const reviewVideoFile = reviewVideoInput && reviewVideoInput.files && reviewVideoInput.files[0];
+
+  try {
+    if (productFile) item.productImage = await readImageFileAsDataUrl(productFile);
+    if (reviewImageFile) item.reviewImage = await readImageFileAsDataUrl(reviewImageFile);
+    if (reviewVideoFile) item.reviewVideo = await readImageFileAsDataUrl(reviewVideoFile);
+  } catch (error) {
+    alert(error.message || "檔案讀取失敗");
+    return;
+  }
+
+  item.name = name;
+  item.orderId = orderId;
+  item.cost = cost;
+  item.date = new Date(orderDate + "T00:00:00").toISOString();
+  item.link = link;
+  item.reviewMode = reviewMode;
+  item.reviewText = String(reviewText || "");
+  item.statusStep = stepRaw;
+  syncAmazonLegacyStatus(item);
+  item.refund = Math.max(0, refund);
+
+  saveAmazon();
+  closeAmazonEdit();
+  renderAmazon();
+  try {
+    await upsertAmazonItemToCloud(item);
+    if (isCloudReady()) setAmzCloudStatus("編輯已同步到 Amazon 雲端。");
+  } catch (error) {
+    setAmzCloudStatus("本機已更新，但 Amazon 雲端同步失敗：" + error.message, true);
+  }
+}
+
 async function addAmazonItem() {
   const nameInput = document.getElementById("amzName");
   const orderIdInput = document.getElementById("amzOrderId");
@@ -1677,6 +1841,11 @@ function renderAmazon() {
       deleteAmazonItem(item.id);
     });
 
+    card.addEventListener("click", function(event) {
+      if (event.target.closest(".amz-card-footer")) return;
+      openAmazonEdit(item.id);
+    });
+
     list.appendChild(card);
   });
 
@@ -1747,7 +1916,15 @@ document.querySelectorAll("#amazonPage .amz-filter-stat[data-amz-filter]").forEa
   });
 });
 
+const amzEditSaveBtn = document.getElementById("amzEditSaveBtn");
+const amzEditCancelBtn = document.getElementById("amzEditCancelBtn");
+const amzEditReviewModeEl = document.getElementById("amzEditReviewMode");
+if (amzEditSaveBtn) amzEditSaveBtn.addEventListener("click", function() { saveAmazonEdit(); });
+if (amzEditCancelBtn) amzEditCancelBtn.addEventListener("click", function() { closeAmazonEdit(); });
+if (amzEditReviewModeEl) amzEditReviewModeEl.addEventListener("change", updateAmzEditReviewMediaFields);
+
 function goPage(page) {
+  if (page !== "amazon") closeAmazonEdit();
   document.getElementById("homePage").style.display = "none";
   document.getElementById("tradingPage").style.display = "none";
   document.getElementById("amazonPage").style.display = "none";

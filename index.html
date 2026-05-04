@@ -243,6 +243,41 @@
       </div>
     </div>
 
+    <div id="amzAccBodyEdit" class="options-acc-body options-acc-overlay" hidden>
+      <div class="panel options-inner-panel">
+        <div class="label" style="margin:0 0 10px;">編輯訂單</div>
+        <input type="hidden" id="amzEditItemId" value="">
+        <div class="form-grid">
+          <div class="field"><label for="amzEditName">商品名稱</label><input id="amzEditName" type="text" placeholder="例如 藍牙耳機"></div>
+          <div class="field"><label for="amzEditOrderId">訂單編號</label><input id="amzEditOrderId" type="text"></div>
+          <div class="field"><label for="amzEditCost">成本（支出）</label><input id="amzEditCost" type="number" min="0" step="1"></div>
+          <div class="field"><label for="amzEditOrderDate">下訂日期</label><input id="amzEditOrderDate" type="date"></div>
+          <div class="field"><label for="amzEditStatusStep">流程狀態</label>
+            <select id="amzEditStatusStep" aria-label="流程狀態"></select>
+          </div>
+          <div class="field"><label for="amzEditRefund">退款金額</label><input id="amzEditRefund" type="number" min="0" step="1" placeholder="0"></div>
+          <div class="field"><label for="amzEditReviewMode">評論模式</label>
+            <select id="amzEditReviewMode">
+              <option value="none">免評</option>
+              <option value="text">文字評</option>
+              <option value="image_text">圖文評</option>
+              <option value="video">視頻</option>
+              <option value="image_text_video">圖文+視頻</option>
+            </select>
+          </div>
+          <div class="field wide"><label for="amzEditReviewText">評論文字（選填）</label><textarea id="amzEditReviewText" rows="2" placeholder="備註或評論摘要"></textarea></div>
+          <div class="field wide" id="amzEditReviewImageField" hidden><label for="amzEditReviewImage">評論圖片（選填，留空則保留原圖）</label><input id="amzEditReviewImage" type="file" accept="image/*"></div>
+          <div class="field wide" id="amzEditReviewVideoField" hidden><label for="amzEditReviewVideo">評論影片（選填，留空則保留原檔）</label><input id="amzEditReviewVideo" type="file" accept="video/*"></div>
+          <div class="field wide"><label for="amzEditLink">商品連結（選填）</label><input id="amzEditLink" type="url"></div>
+          <div class="field wide"><label for="amzEditProductImage">商品圖片（選填，留空則保留原圖）</label><input id="amzEditProductImage" type="file" accept="image/*"></div>
+        </div>
+        <div class="btn-row" style="margin-top: 12px;">
+          <button id="amzEditSaveBtn" type="button" class="btn primary">儲存變更</button>
+          <button id="amzEditCancelBtn" type="button" class="btn secondary">取消</button>
+        </div>
+      </div>
+    </div>
+
     <div id="amzAccBodyCloud" class="options-acc-body options-acc-overlay" hidden>
       <div class="panel options-inner-panel">
         <div class="label" style="margin:0 0 8px;">Amazon 雲端同步</div>

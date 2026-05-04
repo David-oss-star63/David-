@@ -465,7 +465,7 @@ textarea {
 }
 
 .item-card.amz-card {
-  cursor: default;
+  cursor: pointer;
 }
 
 .item-card.amz-card .btn {
