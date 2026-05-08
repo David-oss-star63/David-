@@ -21,6 +21,8 @@
         <button class="btn primary" onclick="goPage('trading')">收藏買賣</button>
         <button class="btn secondary" onclick="goPage('amazon')">Amazon測評</button>
         <button class="btn secondary" onclick="goPage('lego')">LEGO收藏</button>
+        <button class="btn secondary" onclick="goPage('work')">打工小秘書</button>
+        <button class="btn secondary" onclick="goPage('vault')">帳密小天地</button>
       </div>
     </div>
   </div>
@@ -300,6 +302,81 @@
         <p class="page-subtitle">此區塊預留，之後可擴充 LEGO 收藏功能。</p>
       </header>
       <div class="panel lego-placeholder-panel">這個頁面先預留，之後可加入 LEGO 收藏功能。</div>
+    </div>
+  </div>
+
+  <div id="workPage" style="display:none;">
+    <div class="container subpage-shell">
+      <button type="button" class="btn secondary nav-back" onclick="goPage('home')">返回首頁</button>
+      <header class="page-heading">
+        <h1 class="page-title">打工小秘書</h1>
+        <p class="page-subtitle">用月曆記錄每日班表，並自動統計工時、收入與時薪。</p>
+      </header>
+
+      <div class="panel top-panel work-stats-panel">
+        <div class="stat"><div class="label">當月工時</div><div id="workMonthHours" class="value">0 小時</div></div>
+        <div class="stat"><div class="label">當月收入</div><div id="workMonthIncome" class="value">$0</div></div>
+        <div class="stat"><div class="label">累積工時</div><div id="workTotalHours" class="value">0 小時</div></div>
+        <div class="stat"><div class="label">總收入</div><div id="workTotalIncome" class="value">$0</div></div>
+        <div class="stat profit-stat"><div class="label">推算時薪</div><div id="workEstimatedHourly" class="value">$0/時</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="work-toolbar">
+          <button type="button" id="workPrevMonthBtn" class="btn secondary">上個月</button>
+          <div id="workMonthLabel" class="work-month-label">0000年00月</div>
+          <button type="button" id="workNextMonthBtn" class="btn secondary">下個月</button>
+        </div>
+        <div id="workCalendar" class="work-calendar"></div>
+      </div>
+
+      <div class="panel">
+        <div class="label" style="margin:0 0 10px;">區間收入（用來推算時薪）</div>
+        <div class="form-grid">
+          <div class="field"><label for="workIncomeStart">起始日期</label><input id="workIncomeStart" type="date"></div>
+          <div class="field"><label for="workIncomeEnd">結束日期</label><input id="workIncomeEnd" type="date"></div>
+          <div class="field wide"><label for="workIncomeAmount">該區間總收入</label><input id="workIncomeAmount" type="number" min="0" step="0.01" placeholder="例如 3200"></div>
+        </div>
+        <div class="btn-row" style="margin-top: 10px;">
+          <button type="button" id="workAddIncomePeriodBtn" class="btn primary">新增區間收入</button>
+          <button type="button" id="workPullCloudBtn" class="btn secondary">載入雲端</button>
+          <button type="button" id="workPushCloudBtn" class="btn secondary">推送雲端</button>
+        </div>
+        <div id="workCloudStatus" class="cloud-status">可使用和收藏管理相同的雲端設定。</div>
+        <div id="workIncomePeriodList" class="work-income-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="workDayDialog">
+    <div class="modal-header">
+      <h2 id="workDialogTitle" class="modal-title">編輯班表</h2>
+      <button type="button" id="workCloseDialogBtn" class="btn secondary modal-close-btn">關閉</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field"><label for="workStartTime">上班時間</label><input id="workStartTime" type="time"></div>
+        <div class="field"><label for="workEndTime">下班時間</label><input id="workEndTime" type="time"></div>
+        <div class="field wide"><label for="workTipInput">現金小費</label><input id="workTipInput" type="number" min="0" step="0.01" placeholder="例如 50"></div>
+        <div class="field wide"><label for="workNoteInput">備註（選填）</label><textarea id="workNoteInput" placeholder="例如：代班、加班"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="btn-row">
+        <button type="button" id="workSaveDayBtn" class="btn primary">儲存</button>
+        <button type="button" id="workDeleteDayBtn" class="btn warn">清除當日資料</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="vaultPage" style="display:none;">
+    <div class="container subpage-shell">
+      <button type="button" class="btn secondary nav-back" onclick="goPage('home')">返回首頁</button>
+      <header class="page-heading">
+        <h1 class="page-title">帳密小天地</h1>
+        <p class="page-subtitle">此區塊預留，之後可擴充帳密小天地功能。</p>
+      </header>
+      <div class="panel lego-placeholder-panel">這個頁面先預留，之後可加入帳密小天地功能。</div>
     </div>
   </div>
 

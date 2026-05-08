@@ -419,10 +419,12 @@ async function safeSyncCloud() {
     setCloudStatus("安全同步中：先載入雲端，再推送本機（含 Amazon）...");
     await pullCloudItems(false, true);
     await pullAmazonFromCloud({ silent: true, throwOnError: true });
+    await pullWorkFromCloud({ silent: true, throwOnError: true });
     await pushAllToCloud(true);
     await pushAllAmazonToCloud(true);
+    await pushAllWorkToCloud(true);
     setCloudStatus(
-      "安全同步完成：收藏 " + items.length + " 筆；Amazon " + amazonItems.length + " 筆。"
+      "安全同步完成：收藏 " + items.length + " 筆；Amazon " + amazonItems.length + " 筆；打工 " + Object.keys(workShifts).length + " 天。"
     );
   } catch (error) {
     setCloudStatus("安全同步失敗：" + error.message, true);
@@ -1923,12 +1925,435 @@ if (amzEditSaveBtn) amzEditSaveBtn.addEventListener("click", function() { saveAm
 if (amzEditCancelBtn) amzEditCancelBtn.addEventListener("click", function() { closeAmazonEdit(); });
 if (amzEditReviewModeEl) amzEditReviewModeEl.addEventListener("change", updateAmzEditReviewMediaFields);
 
+const WORK_SHIFTS_STORAGE_KEY = "work_shifts_v1";
+const WORK_INCOME_PERIODS_STORAGE_KEY = "work_income_periods_v1";
+let workShifts = loadWorkShifts();
+let workIncomePeriods = loadWorkIncomePeriods();
+let workCurrentMonth = getMonthStart(new Date());
+let workEditingDate = "";
+
+function loadWorkShifts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(WORK_SHIFTS_STORAGE_KEY) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch (_) {
+    return {};
+  }
+}
+
+function loadWorkIncomePeriods() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(WORK_INCOME_PERIODS_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveWorkData() {
+  localStorage.setItem(WORK_SHIFTS_STORAGE_KEY, JSON.stringify(workShifts));
+  localStorage.setItem(WORK_INCOME_PERIODS_STORAGE_KEY, JSON.stringify(workIncomePeriods));
+}
+
+function setWorkCloudStatus(message, isError) {
+  const el = document.getElementById("workCloudStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? "#b91c1c" : "#475569";
+}
+
+function getMonthStart(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function monthKey(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+function toIsoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
+function calcShiftHours(startTime, endTime) {
+  if (!startTime || !endTime) return 0;
+  const s = String(startTime).split(":");
+  const e = String(endTime).split(":");
+  if (s.length < 2 || e.length < 2) return 0;
+  const startMin = Number(s[0]) * 60 + Number(s[1]);
+  const endMin = Number(e[0]) * 60 + Number(e[1]);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) return 0;
+  return (endMin - startMin) / 60;
+}
+
+function shiftHoursByDate(dateKey) {
+  const shift = workShifts[dateKey];
+  if (!shift) return 0;
+  return calcShiftHours(shift.startTime, shift.endTime);
+}
+
+function isDateWithin(dateKey, startDate, endDate) {
+  return dateKey >= startDate && dateKey <= endDate;
+}
+
+function calcEstimatedHourly() {
+  let incomeSum = 0;
+  let hoursSum = 0;
+  workIncomePeriods.forEach(function(period) {
+    incomeSum += Number(period.amount || 0);
+    Object.keys(workShifts).forEach(function(dateKey) {
+      if (isDateWithin(dateKey, period.startDate, period.endDate)) {
+        hoursSum += shiftHoursByDate(dateKey);
+      }
+    });
+  });
+  if (hoursSum <= 0) return 0;
+  return incomeSum / hoursSum;
+}
+
+function calcDayIncome(dateKey) {
+  const shift = workShifts[dateKey];
+  if (!shift) return 0;
+  const hourly = calcEstimatedHourly();
+  const base = shiftHoursByDate(dateKey) * hourly;
+  return base + Number(shift.tip || 0);
+}
+
+function formatHours(value) {
+  return Number(value || 0).toFixed(2) + " 小時";
+}
+
+function updateWorkStats() {
+  const monthLabel = document.getElementById("workMonthLabel");
+  const monthHoursEl = document.getElementById("workMonthHours");
+  const monthIncomeEl = document.getElementById("workMonthIncome");
+  const totalHoursEl = document.getElementById("workTotalHours");
+  const totalIncomeEl = document.getElementById("workTotalIncome");
+  const hourlyEl = document.getElementById("workEstimatedHourly");
+  if (!monthLabel || !monthHoursEl || !monthIncomeEl || !totalHoursEl || !totalIncomeEl || !hourlyEl) return;
+
+  const mk = monthKey(workCurrentMonth);
+  let monthHours = 0;
+  let monthIncome = 0;
+  let totalHours = 0;
+  let totalIncome = 0;
+  Object.keys(workShifts).forEach(function(dateKey) {
+    const dayHours = shiftHoursByDate(dateKey);
+    const dayIncome = calcDayIncome(dateKey);
+    totalHours += dayHours;
+    totalIncome += dayIncome;
+    if (dateKey.startsWith(mk + "-")) {
+      monthHours += dayHours;
+      monthIncome += dayIncome;
+    }
+  });
+  const hourly = calcEstimatedHourly();
+  monthLabel.textContent = workCurrentMonth.getFullYear() + "年" + String(workCurrentMonth.getMonth() + 1).padStart(2, "0") + "月";
+  monthHoursEl.textContent = formatHours(monthHours);
+  monthIncomeEl.textContent = formatMoney(monthIncome);
+  totalHoursEl.textContent = formatHours(totalHours);
+  totalIncomeEl.textContent = formatMoney(totalIncome);
+  hourlyEl.textContent = formatMoney(hourly) + "/時";
+}
+
+function renderWorkIncomePeriods() {
+  const list = document.getElementById("workIncomePeriodList");
+  if (!list) return;
+  if (workIncomePeriods.length === 0) {
+    list.innerHTML = '<div class="meta">目前沒有區間收入資料。</div>';
+    return;
+  }
+  list.innerHTML = "";
+  workIncomePeriods.slice().sort(function(a, b) {
+    return String(a.startDate).localeCompare(String(b.startDate));
+  }).forEach(function(period) {
+    const row = document.createElement("div");
+    row.className = "work-income-row";
+    row.innerHTML =
+      '<div class="meta">' + escapeHtml(period.startDate + " ~ " + period.endDate) + "</div>" +
+      '<div class="meta">' + formatMoney(period.amount) + "</div>" +
+      '<button type="button" class="btn secondary">刪除</button>';
+    const btn = row.querySelector("button");
+    btn.addEventListener("click", function() {
+      workIncomePeriods = workIncomePeriods.filter(function(p) { return p.id !== period.id; });
+      saveWorkData();
+      renderWorkSection();
+    });
+    list.appendChild(row);
+  });
+}
+
+function renderWorkCalendar() {
+  const calendar = document.getElementById("workCalendar");
+  if (!calendar) return;
+  calendar.innerHTML = "";
+  const y = workCurrentMonth.getFullYear();
+  const m = workCurrentMonth.getMonth();
+  const firstDay = new Date(y, m, 1);
+  const startWeekday = firstDay.getDay();
+  const lastDate = new Date(y, m + 1, 0).getDate();
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  weekdays.forEach(function(wd) {
+    const head = document.createElement("div");
+    head.className = "work-weekday";
+    head.textContent = wd;
+    calendar.appendChild(head);
+  });
+  for (let i = 0; i < startWeekday; i++) {
+    const blank = document.createElement("div");
+    blank.className = "work-day-cell blank";
+    calendar.appendChild(blank);
+  }
+  for (let d = 1; d <= lastDate; d++) {
+    const date = new Date(y, m, d);
+    const dateKey = toIsoDate(date);
+    const shift = workShifts[dateKey];
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "work-day-cell";
+    const hours = shift ? shiftHoursByDate(dateKey) : 0;
+    const tip = shift ? Number(shift.tip || 0) : 0;
+    cell.innerHTML =
+      '<div class="work-day-num">' + d + "</div>" +
+      (shift ? '<div class="work-day-meta">' + escapeHtml((shift.startTime || "--:--") + " - " + (shift.endTime || "--:--")) + "</div>" : '<div class="work-day-meta muted">尚未填寫</div>') +
+      (shift ? '<div class="work-day-meta">工時 ' + hours.toFixed(2) + "h</div>" : "") +
+      (tip > 0 ? '<div class="work-day-meta">小費 ' + formatMoney(tip) + "</div>" : "");
+    cell.addEventListener("click", function() {
+      openWorkDayDialog(dateKey);
+    });
+    calendar.appendChild(cell);
+  }
+}
+
+function openWorkDayDialog(dateKey) {
+  workEditingDate = dateKey;
+  const dialog = document.getElementById("workDayDialog");
+  const title = document.getElementById("workDialogTitle");
+  const startInput = document.getElementById("workStartTime");
+  const endInput = document.getElementById("workEndTime");
+  const tipInput = document.getElementById("workTipInput");
+  const noteInput = document.getElementById("workNoteInput");
+  if (!dialog || !title || !startInput || !endInput || !tipInput || !noteInput) return;
+  const shift = workShifts[dateKey] || {};
+  title.textContent = "編輯班表：" + dateKey;
+  startInput.value = shift.startTime || "";
+  endInput.value = shift.endTime || "";
+  tipInput.value = shift.tip != null ? String(shift.tip) : "";
+  noteInput.value = shift.note || "";
+  if (typeof dialog.showModal === "function") dialog.showModal();
+}
+
+function closeWorkDayDialog() {
+  const dialog = document.getElementById("workDayDialog");
+  if (dialog && dialog.open) dialog.close();
+}
+
+function saveWorkDay() {
+  if (!workEditingDate) return;
+  const startInput = document.getElementById("workStartTime");
+  const endInput = document.getElementById("workEndTime");
+  const tipInput = document.getElementById("workTipInput");
+  const noteInput = document.getElementById("workNoteInput");
+  const startTime = startInput ? startInput.value : "";
+  const endTime = endInput ? endInput.value : "";
+  const tip = Number(tipInput ? tipInput.value : 0);
+  const note = noteInput ? noteInput.value.trim() : "";
+  if (!startTime || !endTime) {
+    alert("請填寫上班與下班時間");
+    return;
+  }
+  if (calcShiftHours(startTime, endTime) <= 0) {
+    alert("下班時間需要晚於上班時間");
+    return;
+  }
+  if (!Number.isFinite(tip) || tip < 0) {
+    alert("現金小費需為 0 以上");
+    return;
+  }
+  workShifts[workEditingDate] = { startTime: startTime, endTime: endTime, tip: tip, note: note };
+  saveWorkData();
+  closeWorkDayDialog();
+  renderWorkSection();
+}
+
+function deleteWorkDay() {
+  if (!workEditingDate) return;
+  delete workShifts[workEditingDate];
+  saveWorkData();
+  closeWorkDayDialog();
+  renderWorkSection();
+}
+
+function addWorkIncomePeriod() {
+  const startEl = document.getElementById("workIncomeStart");
+  const endEl = document.getElementById("workIncomeEnd");
+  const amountEl = document.getElementById("workIncomeAmount");
+  const startDate = startEl ? startEl.value : "";
+  const endDate = endEl ? endEl.value : "";
+  const amount = Number(amountEl ? amountEl.value : 0);
+  if (!startDate || !endDate) {
+    alert("請填寫起始與結束日期");
+    return;
+  }
+  if (endDate < startDate) {
+    alert("結束日期不能早於起始日期");
+    return;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert("區間收入需大於 0");
+    return;
+  }
+  workIncomePeriods.push({
+    id: createId(),
+    startDate: startDate,
+    endDate: endDate,
+    amount: amount
+  });
+  saveWorkData();
+  if (amountEl) amountEl.value = "";
+  renderWorkSection();
+}
+
+async function pullWorkFromCloud(opts) {
+  opts = opts || {};
+  const isSilent = Boolean(opts.silent);
+  const throwOnError = Boolean(opts.throwOnError);
+  if (!isSilent) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    if (!isSilent) setWorkCloudStatus("請先填寫雲端設定。", true);
+    return;
+  }
+  try {
+    if (!isSilent) setWorkCloudStatus("載入打工資料中...");
+    const shiftRows = await supabaseRequest(
+      "GET",
+      "work_shifts?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&select=date_key,shift_json",
+      undefined
+    );
+    const periodRows = await supabaseRequest(
+      "GET",
+      "work_income_periods?owner_id=eq." + encodeURIComponent(cloudConfig.owner) + "&select=period_id,period_json",
+      undefined
+    );
+    workShifts = {};
+    (Array.isArray(shiftRows) ? shiftRows : []).forEach(function(row) {
+      if (!row || !row.date_key || !row.shift_json) return;
+      workShifts[String(row.date_key)] = row.shift_json;
+    });
+    workIncomePeriods = (Array.isArray(periodRows) ? periodRows : []).map(function(row) {
+      return row.period_json;
+    }).filter(Boolean);
+    saveWorkData();
+    if (!isSilent) setWorkCloudStatus("已載入打工資料。");
+    renderWorkSection();
+  } catch (error) {
+    if (!isSilent) setWorkCloudStatus("載入失敗：" + error.message, true);
+    if (throwOnError) throw error;
+  }
+}
+
+async function pushAllWorkToCloud(isSilent) {
+  if (!isSilent) refreshCloudConfigFromInputs();
+  if (!isCloudReady()) {
+    if (!isSilent) setWorkCloudStatus("請先填寫雲端設定。", true);
+    return;
+  }
+  try {
+    if (!isSilent) setWorkCloudStatus("推送打工資料中...");
+    const shiftRows = Object.keys(workShifts).map(function(dateKey) {
+      return {
+        owner_id: cloudConfig.owner,
+        date_key: dateKey,
+        shift_json: workShifts[dateKey]
+      };
+    });
+    const periodRows = workIncomePeriods.map(function(period) {
+      return {
+        owner_id: cloudConfig.owner,
+        period_id: String(period.id || createId()),
+        period_json: period
+      };
+    });
+    await supabaseRequest(
+      "DELETE",
+      "work_shifts?owner_id=eq." + encodeURIComponent(cloudConfig.owner),
+      undefined,
+      { "Prefer": "return=minimal" }
+    );
+    await supabaseRequest(
+      "DELETE",
+      "work_income_periods?owner_id=eq." + encodeURIComponent(cloudConfig.owner),
+      undefined,
+      { "Prefer": "return=minimal" }
+    );
+    if (shiftRows.length > 0) {
+      await supabaseRequest(
+        "POST",
+        "work_shifts",
+        shiftRows,
+        { "Prefer": "resolution=merge-duplicates,return=minimal" }
+      );
+    }
+    if (periodRows.length > 0) {
+      await supabaseRequest(
+        "POST",
+        "work_income_periods",
+        periodRows,
+        { "Prefer": "resolution=merge-duplicates,return=minimal" }
+      );
+    }
+    if (!isSilent) setWorkCloudStatus("推送完成。");
+  } catch (error) {
+    if (!isSilent) setWorkCloudStatus("推送失敗：" + error.message, true);
+    throw error;
+  }
+}
+
+function renderWorkSection() {
+  renderWorkCalendar();
+  renderWorkIncomePeriods();
+  updateWorkStats();
+}
+
+const workPrevMonthBtn = document.getElementById("workPrevMonthBtn");
+if (workPrevMonthBtn) {
+  workPrevMonthBtn.addEventListener("click", function() {
+    workCurrentMonth = new Date(workCurrentMonth.getFullYear(), workCurrentMonth.getMonth() - 1, 1);
+    renderWorkSection();
+  });
+}
+const workNextMonthBtn = document.getElementById("workNextMonthBtn");
+if (workNextMonthBtn) {
+  workNextMonthBtn.addEventListener("click", function() {
+    workCurrentMonth = new Date(workCurrentMonth.getFullYear(), workCurrentMonth.getMonth() + 1, 1);
+    renderWorkSection();
+  });
+}
+const workAddIncomePeriodBtn = document.getElementById("workAddIncomePeriodBtn");
+if (workAddIncomePeriodBtn) workAddIncomePeriodBtn.addEventListener("click", addWorkIncomePeriod);
+const workCloseDialogBtn = document.getElementById("workCloseDialogBtn");
+if (workCloseDialogBtn) workCloseDialogBtn.addEventListener("click", closeWorkDayDialog);
+const workSaveDayBtn = document.getElementById("workSaveDayBtn");
+if (workSaveDayBtn) workSaveDayBtn.addEventListener("click", saveWorkDay);
+const workDeleteDayBtn = document.getElementById("workDeleteDayBtn");
+if (workDeleteDayBtn) workDeleteDayBtn.addEventListener("click", deleteWorkDay);
+const workPullCloudBtn = document.getElementById("workPullCloudBtn");
+if (workPullCloudBtn) workPullCloudBtn.addEventListener("click", function() { pullWorkFromCloud({ silent: false }); });
+const workPushCloudBtn = document.getElementById("workPushCloudBtn");
+if (workPushCloudBtn) workPushCloudBtn.addEventListener("click", function() { pushAllWorkToCloud(false); });
+
 function goPage(page) {
   if (page !== "amazon") closeAmazonEdit();
   document.getElementById("homePage").style.display = "none";
   document.getElementById("tradingPage").style.display = "none";
   document.getElementById("amazonPage").style.display = "none";
   document.getElementById("legoPage").style.display = "none";
+  document.getElementById("workPage").style.display = "none";
+  document.getElementById("vaultPage").style.display = "none";
   setOptionsPanelOpen(false);
   setAmzOptionsPanelOpen(false);
 
@@ -1945,6 +2370,13 @@ function goPage(page) {
   if (page === "lego") {
     document.getElementById("legoPage").style.display = "block";
   }
+  if (page === "work") {
+    document.getElementById("workPage").style.display = "block";
+    renderWorkSection();
+  }
+  if (page === "vault") {
+    document.getElementById("vaultPage").style.display = "block";
+  }
 }
 
 (async function() {
@@ -1956,7 +2388,9 @@ function goPage(page) {
   );
   if (isCloudReady()) {
     await pullAmazonFromCloud({ silent: true });
+    await pullWorkFromCloud({ silent: true });
   }
+  renderWorkSection();
   renderAmazon();
   goPage("home");
 })();
