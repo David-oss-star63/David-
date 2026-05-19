@@ -5,7 +5,7 @@ const CLOUD_LAST_USED_KEY = "collection_cloud_last_used_v1";
 const ARROW_ICON_URL =
   "data:image/svg+xml," +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M6 15l6-6 6 6" fill="none" stroke="#4f46e5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M6 15l6-6 6 6" fill="none" stroke="#5b5ce0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   );
 const icons = {
   鞋子: "👟",
@@ -2000,6 +2000,41 @@ function isDateWithin(dateKey, startDate, endDate) {
   return dateKey >= startDate && dateKey <= endDate;
 }
 
+function hoursInIncomePeriod(period) {
+  let sum = 0;
+  Object.keys(workShifts).forEach(function(dateKey) {
+    if (isDateWithin(dateKey, period.startDate, period.endDate)) {
+      sum += shiftHoursByDate(dateKey);
+    }
+  });
+  return sum;
+}
+
+function hourlyForPeriod(period) {
+  const h = hoursInIncomePeriod(period);
+  if (h <= 0) return null;
+  return Number(period.amount || 0) / h;
+}
+
+function workPeriodToneByIdMap() {
+  const sorted = workIncomePeriods.slice().sort(function(a, b) {
+    const c = String(a.startDate).localeCompare(String(b.startDate));
+    if (c !== 0) return c;
+    return String(a.endDate).localeCompare(String(b.endDate));
+  });
+  const map = {};
+  sorted.forEach(function(p, i) {
+    map[p.id] = i;
+  });
+  return map;
+}
+
+function hslaPeriodWash(toneIdx, alpha) {
+  const hues = [215, 145, 275, 32, 168, 328];
+  const h = hues[toneIdx % hues.length];
+  return "hsla(" + h + ", 72%, 93%, " + alpha + ")";
+}
+
 function calcEstimatedHourly() {
   let incomeSum = 0;
   let hoursSum = 0;
@@ -2068,11 +2103,13 @@ function renderWorkIncomePeriods() {
     return;
   }
   list.innerHTML = "";
+  const toneMap = workPeriodToneByIdMap();
   workIncomePeriods.slice().sort(function(a, b) {
     return String(a.startDate).localeCompare(String(b.startDate));
   }).forEach(function(period) {
     const row = document.createElement("div");
-    row.className = "work-income-row";
+    const tix = toneMap[period.id] != null ? toneMap[period.id] % 6 : 0;
+    row.className = "work-income-row work-income-row-tone-" + tix;
     row.innerHTML =
       '<div class="meta">' + escapeHtml(period.startDate + " ~ " + period.endDate) + "</div>" +
       '<div class="meta">' + formatMoney(period.amount) + "</div>" +
@@ -2096,6 +2133,7 @@ function renderWorkCalendar() {
   const firstDay = new Date(y, m, 1);
   const startWeekday = firstDay.getDay();
   const lastDate = new Date(y, m + 1, 0).getDate();
+  const toneByPeriodId = workPeriodToneByIdMap();
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   weekdays.forEach(function(wd) {
     const head = document.createElement("div");
@@ -2115,10 +2153,44 @@ function renderWorkCalendar() {
     const cell = document.createElement("button");
     cell.type = "button";
     cell.className = "work-day-cell";
+    const matchingPeriods = workIncomePeriods.filter(function(p) {
+      return isDateWithin(dateKey, p.startDate, p.endDate);
+    });
+    let hourlyHtml = "";
+    matchingPeriods.forEach(function(p) {
+      const hr = hourlyForPeriod(p);
+      if (hr != null && Number.isFinite(hr)) {
+        hourlyHtml += '<div class="work-day-meta work-day-hourly">' + formatMoney(hr) + "/時</div>";
+      } else {
+        hourlyHtml += '<div class="work-day-meta work-day-hourly pending">尚無工時 → 無法推算</div>';
+      }
+    });
+    if (matchingPeriods.length === 1) {
+      const tix = toneByPeriodId[matchingPeriods[0].id] % 6;
+      cell.classList.add("work-income-range", "work-period-tone-" + tix);
+    } else if (matchingPeriods.length > 1) {
+      cell.classList.add("work-income-range", "work-period-multi");
+      const t0 = toneByPeriodId[matchingPeriods[0].id] % 6;
+      const t1 = toneByPeriodId[matchingPeriods[1].id] % 6;
+      const c0 = hslaPeriodWash(t0, 0.52);
+      const c1 = hslaPeriodWash(t1, 0.52);
+      cell.style.background = "linear-gradient(125deg, " + c0 + " 0%, " + c1 + " 100%), #ffffff";
+    }
     const hours = shift ? shiftHoursByDate(dateKey) : 0;
     const tip = shift ? Number(shift.tip || 0) : 0;
+    const hasShift =
+      Boolean(shift && shift.startTime && shift.endTime) &&
+      calcShiftHours(shift.startTime, shift.endTime) > 0;
+    if (hasShift) {
+      cell.classList.add("work-day-has-shift");
+      cell.setAttribute("aria-label", dateKey + "，已記錄班表");
+    }
     cell.innerHTML =
-      '<div class="work-day-num">' + d + "</div>" +
+      '<div class="work-day-head">' +
+      '<span class="work-day-num">' + d + "</span>" +
+      (hasShift ? '<span class="work-shift-mark" title="當日已記錄打工班表">班</span>' : "") +
+      "</div>" +
+      (hourlyHtml ? '<div class="work-day-hourly-block">' + hourlyHtml + "</div>" : "") +
       (shift ? '<div class="work-day-meta">' + escapeHtml((shift.startTime || "--:--") + " - " + (shift.endTime || "--:--")) + "</div>" : '<div class="work-day-meta muted">尚未填寫</div>') +
       (shift ? '<div class="work-day-meta">工時 ' + hours.toFixed(2) + "h</div>" : "") +
       (tip > 0 ? '<div class="work-day-meta">小費 ' + formatMoney(tip) + "</div>" : "");
